@@ -25,6 +25,23 @@ def fresh_sandbox(tag: str = "sandbox") -> sqlite3.Connection:
     return db.connect(p)
 
 
+def cleanup_runtime(max_age_hours: float = 12) -> int:
+    """Delete per-visitor databases nobody has touched for a while (public hosting keeps disk bounded)."""
+    import time
+    if not config.RUNTIME_DIR.exists():
+        return 0
+    cutoff = time.time() - max_age_hours * 3600
+    removed = 0
+    for p in config.RUNTIME_DIR.glob("*.sqlite"):
+        if p.name.startswith(("session_", "sb_", "tamper_")) and p.stat().st_mtime < cutoff:
+            try:
+                p.unlink()
+                removed += 1
+            except OSError:
+                pass  # still open somewhere; try next time
+    return removed
+
+
 def _leg2(conn, pax_ids: list[str]) -> dict[str, str]:
     out = {}
     for pid in pax_ids:
@@ -42,8 +59,8 @@ def _bags(conn, pax_ids: list[str]) -> dict[str, list[str]]:
     return out
 
 
-def rollback_experiment(kind: str = "SEAT_CONFLICT", at_step: int = 7) -> dict:
-    conn = fresh_sandbox()
+def rollback_experiment(kind: str = "SEAT_CONFLICT", at_step: int = 7, tag: str = "sandbox") -> dict:
+    conn = fresh_sandbox(tag)
     try:
         plan = tools.plan_passenger_recovery(conn, actor="LAB")
         full = recovery.load_plan(conn, plan["plan_id"])
@@ -70,9 +87,9 @@ def rollback_experiment(kind: str = "SEAT_CONFLICT", at_step: int = 7) -> dict:
         conn.close()
 
 
-def naive_vs_guarded() -> dict:
+def naive_vs_guarded(tag: str = "sandbox_naive") -> dict:
     """Run an unconstrained revenue-first plan and the AeroTurn plan through the same guard."""
-    conn = fresh_sandbox("sandbox_naive")
+    conn = fresh_sandbox(tag)
     try:
         naive = recovery.plan_naive(conn)
         naive_res = tools.execute_atomic_passenger_rebook(conn, plan_id=naive["plan_id"], actor="UNCONSTRAINED")

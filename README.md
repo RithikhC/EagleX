@@ -2,6 +2,12 @@
 
 **Domain 4: Aviation & Airport Operations (University Track) · Team EagleX**
 
+[![Open the live demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://aeroturn-eaglex.streamlit.app)
+
+**Live demo: https://aeroturn-eaglex.streamlit.app**. Start at the 🎬 *Guided demo* tab. Every visitor gets
+their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
+asleep, the first load takes about a minute.
+
 > A Boeing 777 lands 75 minutes late at Dubai with 280 connecting passengers. The inbound crew is 20 minutes
 > from its legal duty limit, a hydraulic defect needs a licensed engineer's sign-off, and the outbound captain
 > has just filed a fatigue report. AeroTurn lets an LLM reason about the cascade while plain Python makes the
@@ -187,6 +193,19 @@ data/                      pristine SQLite + JSON snapshot
 docs/                      DEMO_SCRIPT.md · PITCH.md · ARCHITECTURE.md
 tests/                     60 pytest tests
 ```
+
+## Deploying the live demo (Streamlit Community Cloud, free)
+
+1. Sign in at [share.streamlit.io](https://share.streamlit.io) with the GitHub account that owns this repo.
+2. Click **Create app** and choose **Yup, I have an app**.
+3. Enter repository `RithikhC/EagleX`, branch `main`, main file `app.py`. Under **App URL**, enter
+   `aeroturn-eaglex`.
+4. Optional: open **Advanced settings**, pick Python 3.12, and under **Secrets** add an LLM key so the hosted
+   agent uses a real model instead of the offline policy:
+   ```toml
+   GROQ_API_KEY = "gsk_..."
+   ```
+5. Click **Deploy**. Pushing to `main` redeploys automatically.
 
 ## Honest limitations
 

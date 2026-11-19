@@ -8,6 +8,8 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
+import uuid
 
 import pandas as pd
 import plotly.express as px
@@ -56,9 +58,28 @@ ss = st.session_state
 ss.setdefault("flash", [])
 ss.setdefault("results", {})
 
+# Hosted deployments (Streamlit Community Cloud) keep API keys in st.secrets; expose them to the LLM layer.
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ.setdefault(_k, _v)
+except Exception:  # noqa: BLE001 - no secrets file locally is fine
+    pass
+
+# Every visitor gets an isolated copy of the scenario. The id lives in the URL (?s=...), so a page refresh
+# keeps your progress and two judges on the public demo never step on each other.
+_sid = st.query_params.get("s", "")
+if not re.fullmatch(r"[a-f0-9]{10}", _sid or ""):
+    _sid = uuid.uuid4().hex[:10]
+    st.query_params["s"] = _sid
+SESSION_DB = config.RUNTIME_DIR / f"session_{_sid}.sqlite"
+if "cleaned" not in ss:
+    lab.cleanup_runtime()
+    ss["cleaned"] = True
+
 
 def conn():
-    return db.connect()
+    return db.connect(SESSION_DB)
 
 
 C = conn()
@@ -175,7 +196,7 @@ def run_agent(container, inject: bool, fault_step: int = 7) -> None:
 # callbacks (run before the page re-renders, so KPIs are always fresh)
 # ---------------------------------------------------------------------------
 def cb_reset():
-    db.reset_runtime()
+    db.reset_runtime(SESSION_DB)
     for k in ("agent_result", "results", "flash"):
         ss.pop(k, None)
     ss["results"], ss["flash"] = {}, []
@@ -271,11 +292,11 @@ def cb_rebook_remaining():
 
 def cb_lab_rollback():
     ss["results"]["lab_rollback"] = lab.rollback_experiment(ss.get("lab_kind", "SEAT_CONFLICT"),
-                                                            int(ss.get("lab_step", 7)))
+                                                            int(ss.get("lab_step", 7)), tag=f"sb_{_sid}")
 
 
 def cb_lab_naive():
-    ss["results"]["lab_naive"] = lab.naive_vs_guarded()
+    ss["results"]["lab_naive"] = lab.naive_vs_guarded(tag=f"sb_{_sid}_naive")
 
 
 # ---------------------------------------------------------------------------
@@ -861,7 +882,7 @@ with tabs[9]:
     st.markdown(f"Hash chain: {'✅ **intact**' if ch_['ok'] else '❌ **broken at ' + str(ch_.get('broken_at_seq')) + '**'} "
                 f"· {ch_['entries']} entries · head `{ch_.get('head', '')[:20]}`")
     if st.button("Tamper test: edit one historic entry in a copy"):
-        ss["results"]["tamper"] = lab.tamper_demo()
+        ss["results"]["tamper"] = lab.tamper_demo(SESSION_DB)
     if "tamper" in ss["results"]:
         t_ = ss["results"]["tamper"]
         if "after" in t_:
