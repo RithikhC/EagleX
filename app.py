@@ -90,12 +90,19 @@ ss.setdefault("incidents", [])
 ss.setdefault("results", {})
 
 # Hosted deployments keep API keys in st.secrets; expose them to the LLM layer.
+# Top-level keys and keys inside a [section] are both accepted; names are upper-cased (GROQ_API_KEY).
+SECRET_NAMES: list[str] = []
 try:
     for _k, _v in st.secrets.items():
-        if isinstance(_v, str):
-            os.environ.setdefault(_k, _v)
-except Exception:  # noqa: BLE001
-    pass
+        for _kk, _vv in (_v.items() if hasattr(_v, "items") else [(_k, _v)]):
+            if isinstance(_vv, str) and _vv.strip():
+                os.environ.setdefault(str(_kk).strip().upper(), _vv.strip())
+                SECRET_NAMES.append(str(_kk).strip().upper())
+    SECRET_STATUS = ", ".join(sorted(set(SECRET_NAMES))) or "none set"
+except FileNotFoundError:
+    SECRET_STATUS = "no secrets file (local runs use .env)"
+except Exception as _exc:  # noqa: BLE001 - names only, never values
+    SECRET_STATUS = f"could not be read ({type(_exc).__name__}: check the TOML, e.g. quotes around the value)"
 
 # Every visitor gets an isolated copy of the scenario, keyed in the URL (?s=...).
 _sid = st.query_params.get("s", "")
@@ -668,6 +675,9 @@ with st.sidebar:
     cc = st.columns(3)
     for i, t_ in enumerate(("15:10", "15:25", "16:30")):
         cc[i].button(t_, on_click=cb_advance, args=(t_,), width="stretch", key=f"adv_{t_}")
+    _bi = brain_info()
+    st.caption(f"Brain: {_bi['provider']}" + (f" ({_bi.get('reason')})" if _bi.get("reason") else "")
+               + f" · secrets visible to the app: {SECRET_STATUS}")
     st.caption(f"Visitor session `{_sid}` · guard pin `{guards.verify_guard_integrity()['actual'][:12]}`")
 
 # ---------------------------------------------------------------------------
