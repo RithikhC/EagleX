@@ -1,0 +1,11 @@
+# runtime state (the pristine dataset in data/ IS committed)
+runtime/
+*.sqlite-journal
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+.DS_Store
+.claude/

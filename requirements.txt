@@ -1,0 +1,6 @@
+# AeroTurn runtime
+streamlit>=1.50
+pandas>=2.1
+plotly>=5.20
+# tests
+pytest>=8.0
