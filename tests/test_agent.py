@@ -93,3 +93,59 @@ def test_llm_agent_is_contained_by_tools_and_guards(conn):
     assert any(m.get("role") == "tool" for m in _FakeLLM.requests[-2]["messages"])
     assert not any(t["function"]["name"].startswith("approve") for t in first["tools"])
     assert db.check_invariants(conn)["all_clear"]
+
+
+class _FakePlanner(BaseHTTPRequestHandler):
+    calls: list = []
+    PLAN = {
+        "analysis": "Crew FDP forbids holding for B14; C31 keeps them legal. EK813 needs a new captain.",
+        "gate": {"new_gate": "C31", "why": "crew legal, fewest misconnects"},
+        "holds": [{"flight_no": "EK418", "hold_min": 8, "why": "cheaper than rebooking 4 passengers"}],
+        "crew_swap": {"remove_crew_id": "C-B01", "add_crew_id": "S-04", "why": "nearest legal captain"},
+        "retime": {"new_etd": "16:30", "why": "as early as possible"},          # illegal: before EOBT 17:15
+        "rebooking_objective": "earliest_arrival", "objective_why": "minimise delay",
+        "templates": {"STANDARD": "Dear {first_name}, you now fly {new_flight} at {dep_time}.",
+                      "PREMIUM": "Dear {first_name}, take EK372 at 18:25."},     # hard-coded facts: must be rejected
+    }
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode())
+        _FakePlanner.calls.append(body)
+        if "response_format" in body:
+            n = sum(1 for b in _FakePlanner.calls if "response_format" in b)
+            payload = self.PLAN if n == 1 else {"retime": {"new_etd": "17:15", "why": "critical-path EOBT"}}
+            msg = {"role": "assistant", "content": json.dumps(payload)}
+        else:
+            msg = {"role": "assistant", "content": "**Situation** EK812 in-block 15:20."}
+        out = json.dumps({"choices": [{"message": msg}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(out)))
+        self.end_headers()
+        self.wfile.write(out)
+
+
+def test_plan_and_execute_mode_replans_after_guard_block(conn):
+    _FakePlanner.calls = []
+    srv = HTTPServer(("127.0.0.1", 0), _FakePlanner)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        client = OpenAICompatClient("groq", f"http://127.0.0.1:{srv.server_port}/v1", "k", "openai/gpt-oss-fake")
+        a = agent.AeroTurnAgent(conn, client)
+        assert a.mode == "plan"
+        res = a.run()
+    finally:
+        srv.shutdown()
+    trace = res["trace"]
+    assert any(e["kind"] == "guard_block" and "TURN-001" in e["title"] for e in trace)   # 16:30 refused
+    staged = {(r["change_type"], r["status"]): r for r in db.rows(conn, "SELECT * FROM schedule_changes")}
+    assert ("RETIME", "PENDING") in staged and '"17:15"' in staged[("RETIME", "PENDING")]["payload"]
+    assert ("HOLD_FLIGHT", "PENDING") in staged and ("GATE_REASSIGNMENT", "PENDING") in staged
+    assert sum(1 for b in _FakePlanner.calls if "response_format" in b) == 2              # plan + one replan
+    assert any(e["kind"] == "error" and "Template validator" in e["title"] for e in trace)
+    assert not any(e["kind"] == "autopilot" for e in trace)                               # LLM covered everything
+    assert a.missing_steps() == []
+    assert recovery.connection_risk(conn)["at_risk"] == 0 and db.check_invariants(conn)["all_clear"]

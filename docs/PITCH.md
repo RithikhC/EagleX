@@ -1,6 +1,6 @@
 # AeroTurn: pitch outline and judge Q&A
 
-## Slide outline (7 slides, 3 minutes before the live demo)
+## Slide outline (8 slides, 3 minutes before the live demo)
 
 1. **The 75-minute problem.** One late wide-body is a network event: gates, crew duty clocks, bags, 280
    connections. Today an OCC controller juggles 6 systems by phone.
@@ -19,7 +19,13 @@
    failure leaves 0 double bookings, 0 orphaned bags and an identical state hash.
 6. **Human in the loop that cannot be rubber-stamped.** Changes are staged with justification, guards re-run at
    approval, decisions have deadlines, and the agent cannot approve.
-7. **Impact.**
+7. **Data & evidence.**
+   - Synthetic, reproducible scenario (seed 812, as the brief requires).
+   - Rules from EASA ORO.FTL.205 / CS FTL.1.225 / ORO.FTL.235, Part-66 and ICAO Annex 17 PPBM.
+   - EU261 Art. 7/9 with *Sturgeon*, *Folkerts* and *Wegener*, plus *Gahan v Emirates* (Manchester → Dubai → Bangkok,
+     missed connection, the same pattern as our scenario).
+   - Full list: docs/DATA_SOURCES.md.
+8. **Impact.**
    - 45/45 connections recovered the same day (41 rebooked, 4 saved by an 8-min hold)
    - 10/10 vulnerable passengers protected
    - Passenger compensation and care: EUR 33k → EUR 9.8k (−70%)
@@ -34,7 +40,7 @@
 | Inbound crew FDP limit / margin | 15:40 / 20 min |
 | Holding for planned stand B14 | in-block 15:55 → FDP breach by 15 min |
 | EK813 critical-path EOBT | 17:15 (+65), hydraulic inspection on critical path |
-| Standby captain chosen | S-04, 9 min away, FDP margin 2h15 |
+| Standby captain chosen | S-04, 9 min away, FDP margin 2h54 |
 | Legacy vs AeroTurn passenger compensation + care | EUR 33,275 vs EUR 9,825 |
 | Network cost (incl. EK813 delay, knock-on, hold) | EUR 51,959 vs EUR 30,746 |
 | Connection hold staged | EK418 SYD +8 min: EUR 2,237 vs EUR 2,500 to rebook 4 pax ~6h later |
@@ -43,6 +49,10 @@
 | Tests | 60 passing |
 
 ## Anticipated judge questions
+
+**"Where does your data come from? Is it real?"**
+The brief supplies no dataset and asks us to synthesise one. Ours is generated from a fixed seed, so it is byte-reproducible. The rules are real and sourced: EASA flight-time tables, CS FTL.1.225 standby, Part-66 licences, ICAO Annex 17 bag matching, EU261 and its case law. Every number we chose ourselves is listed as an assumption in docs/DATA_SOURCES.md.
+
 
 **"What exactly does the LLM do, if code does all the work?"**
 It owns the *judgement layer*:
@@ -79,7 +89,7 @@ The executive brief gets a numeric grounding check, so any number not in the fac
 **"Is the FTL model real?"**
 It is modelled on EASA ORO.FTL.205 Table 2:
 - The max FDP depends on report time, minus 30 min per sector above 2, with a 9h floor.
-- Airport standby counts in full.
+- Standby (CS FTL.1.225): the FDP counts from reporting; airport standby beyond 4h reduces the max FDP, and airport standby + FDP is capped at 16h. Home standby beyond 6h reduces the FDP.
 - Home standby over 6h reduces the FDP.
 - Minimum rest is 12h.
 - Commander's discretion is never planned.

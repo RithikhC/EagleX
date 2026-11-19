@@ -39,7 +39,13 @@ def brief_facts(conn: sqlite3.Connection) -> dict:
     s = get_turnaround_and_crew_state(conn)
     changes = db.rows(conn, "SELECT change_type, status, payload, flight_id FROM schedule_changes ORDER BY staged_at")
     txns = db.rows(conn, "SELECT outcome, detail FROM txn_log ORDER BY started_at")
-    blocks = db.rows(conn, "SELECT action, detail FROM audit_log WHERE actor = 'GUARD' AND action LIKE '%BLOCK%'")
+    blocks = db.rows(conn, "SELECT action, detail FROM audit_log WHERE actor = 'GUARD' AND action LIKE '%BLOCK%' "
+                           "ORDER BY seq")
+    interventions = []
+    for b in blocks:
+        d = json.loads(b["detail"] or "{}")
+        interventions.append(f"{b['action']} {d.get('flight', '')} ({', '.join(d.get('rules', []))})".replace("  ", " "))
+    notes = db.one(conn, "SELECT COUNT(*) AS n FROM notifications")["n"]
     rebooked = db.rows(conn, """
         SELECT p.first_name || ' ' || p.last_name AS name, p.ssr, f.flight_no, f.std, f.dest FROM bookings b
         JOIN passengers p ON p.pax_id = b.pax_id JOIN flights f ON f.flight_id = b.flight_id
@@ -58,8 +64,14 @@ def brief_facts(conn: sqlite3.Connection) -> dict:
         "controller_changes": [{"type": ch["change_type"], "status": ch["status"],
                                 "details": {k: v for k, v in json.loads(ch["payload"]).items() if k != "crew_ids"}}
                                for ch in changes],
+        "awaiting_controller": [f"{ch['change_type']} {_fmt_details(json.loads(ch['payload']))}"
+                                for ch in changes if ch["status"] == "PENDING"],
+        "executed_atomically": ([f"rebooked {len(rebooked)} passengers with their bags in one transaction "
+                                 f"(transactions: {', '.join(t['outcome'] for t in txns)})"] if rebooked else [])
+                               + ([f"{notes} passenger notifications sent"] if notes else []),
         "transactions": [t["outcome"] for t in txns],
         "guard_blocks": len(blocks),
+        "guard_interventions": interventions,
         "cost_eur": {"legacy": c["legacy_auto_reprotect"]["total"], "aeroturn": c["aeroturn"]["total"],
                      "savings": c["savings"], "eu261_aeroturn": c["aeroturn"]["eu261"],
                      "eu261_legacy": c["legacy_auto_reprotect"]["eu261"],
@@ -111,8 +123,11 @@ def _fmt_details(d: dict) -> str:
 BRIEF_PROMPT = """You are the AeroTurn disruption agent writing for the human Operations Controller.
 Write an executive turnaround recovery brief in Markdown, at most 220 words, with these bold headings:
 Situation, Decisions awaiting you, Executed (atomic), Safety guard interventions, Passenger impact, Cost.
+"Decisions awaiting you" lists ONLY awaiting_controller. "Executed (atomic)" lists ONLY executed_atomically
+(staged changes are NOT executed). "Safety guard interventions" lists ONLY guard_interventions, verbatim in meaning.
 Use ONLY facts and numbers from the JSON below. Do not invent any number, time, flight or name.
-Be direct and specific; this person decides in 60 seconds.
+Write amounts like EUR 12,325.
+Be direct and specific; the controller must decide quickly.
 
 FACTS:
 {facts}"""
@@ -157,6 +172,8 @@ def _numbers(obj) -> set[str]:
 def grounding_check(text: str, facts: dict) -> dict:
     """Every number in the narrative must exist in the facts the model was given."""
     allowed = _numbers(facts) | {str(i) for i in range(0, 11)} | {"261"}
-    found = [m.replace(",", "") for m in _NUM.findall(re.sub(r"\b(?:EU|EK|IP|MX|FL|P)[- ]?(\d+)", "", text))]
+    # models write 33,275 / 33 275 / 33\u202f275 / 33.275: join digit groups before checking
+    joined = re.sub(r"(?<=\d)[ ,.\u00a0\u202f\u2009](?=\d{3}\b)", "", text)
+    found = [m.replace(",", "") for m in _NUM.findall(re.sub(r"\b(?:EU|EK|IP|MX|FL|P)[- ]?(\d+)", "", joined))]
     ungrounded = sorted({n for n in found if n not in allowed})
     return {"numbers_checked": len(found), "ungrounded": ungrounded, "grounded": not ungrounded}

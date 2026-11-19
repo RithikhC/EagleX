@@ -19378,7 +19378,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": "Operated EK811 DXB-LCA and EK812 LCA-DXB"
+   "notes": "Operated EK811 DXB-LCA and EK812 LCA-DXB",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A02",
@@ -19393,7 +19395,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A03",
@@ -19408,7 +19412,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A04",
@@ -19423,7 +19429,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A05",
@@ -19438,7 +19446,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A06",
@@ -19453,7 +19463,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A07",
@@ -19468,7 +19480,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A08",
@@ -19483,7 +19497,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A09",
@@ -19498,7 +19514,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A10",
@@ -19513,7 +19531,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A11",
@@ -19528,7 +19548,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A12",
@@ -19543,7 +19565,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-A13",
@@ -19558,7 +19582,9 @@
    "rest_before_duty_min": 900,
    "location": "On board EK812",
    "proximity_min": 0,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B01",
@@ -19573,7 +19599,9 @@
    "rest_before_duty_min": 1200,
    "location": "Crew hotel",
    "proximity_min": 40,
-   "notes": "Fatigue report filed 14:12. Removed from duty (non-negotiable)."
+   "notes": "Fatigue report filed 14:12. Removed from duty (non-negotiable).",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B02",
@@ -19588,7 +19616,9 @@
    "rest_before_duty_min": 1560,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B03",
@@ -19603,7 +19633,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B04",
@@ -19618,7 +19650,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B05",
@@ -19633,7 +19667,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B06",
@@ -19648,7 +19684,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B07",
@@ -19663,7 +19701,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B08",
@@ -19678,7 +19718,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B09",
@@ -19693,7 +19735,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B10",
@@ -19708,7 +19752,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B11",
@@ -19723,7 +19769,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B12",
@@ -19738,7 +19786,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "C-B13",
@@ -19753,7 +19803,9 @@
    "rest_before_duty_min": 1440,
    "location": "Crew Reporting Centre",
    "proximity_min": 8,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-01",
@@ -19768,7 +19820,9 @@
    "rest_before_duty_min": 840,
    "location": "Crew lounge, Concourse B",
    "proximity_min": 6,
-   "notes": "On airport standby since 06:00"
+   "notes": "On airport standby since 06:00",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-02",
@@ -19783,7 +19837,9 @@
    "rest_before_duty_min": 1800,
    "location": "Home (Dubai Marina)",
    "proximity_min": 35,
-   "notes": "Home standby since 12:00"
+   "notes": "Home standby since 12:00",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-03",
@@ -19798,7 +19854,9 @@
    "rest_before_duty_min": 1080,
    "location": "Crew lounge, Concourse C",
    "proximity_min": 4,
-   "notes": "A380 fleet only"
+   "notes": "A380 fleet only",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-04",
@@ -19813,7 +19871,9 @@
    "rest_before_duty_min": 1320,
    "location": "Crew Reporting Centre",
    "proximity_min": 9,
-   "notes": "On airport standby since 14:00"
+   "notes": "On airport standby since 14:00",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-05",
@@ -19828,7 +19888,9 @@
    "rest_before_duty_min": 540,
    "location": "Home (Al Barsha)",
    "proximity_min": 25,
-   "notes": "Landed from night duty, only 9h rest"
+   "notes": "Landed from night duty, only 9h rest",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-06",
@@ -19843,7 +19905,9 @@
    "rest_before_duty_min": 960,
    "location": "Crew lounge, Concourse B",
    "proximity_min": 7,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   },
   {
    "crew_id": "S-07",
@@ -19858,7 +19922,9 @@
    "rest_before_duty_min": 1200,
    "location": "Home (JLT)",
    "proximity_min": 30,
-   "notes": ""
+   "notes": "",
+   "standby_kind": null,
+   "standby_start": null
   }
  ],
  "crew_assignments": [

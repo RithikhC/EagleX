@@ -114,7 +114,7 @@ is shown to be identical before and after.
 | Brief requirement | Enforcement | Test |
 |---|---|---|
 | Atomic state, mid-way rollback | `tools.execute_atomic_passenger_rebook` (4 layers above) | `test_atomic.py` (seat conflict at steps 7 and 30, bag-system fault, deferred FK, replay protection, stale plan) |
-| Crew legal duty limits | `guards.check_crew_for_sector`, `check_inbound_crew_on_blocks`: EASA-style FDP table, sector reduction, airport standby counts in full, rest, rating, fatigue, reachability | `test_guards.py`, `test_ops.py::test_standby_matcher…` |
+| Crew legal duty limits | `guards.check_crew_for_sector`, `check_inbound_crew_on_blocks`: EASA-style FDP table, sector reduction, standby rules per CS FTL.1.225 (airport standby >4h reduces FDP, standby+FDP ≤16h), rest, rating, fatigue, reachability | `test_guards.py`, `test_ops.py::test_standby_matcher…` |
 | Mandatory maintenance sign-off | `guards.check_maintenance_release` + `check_crs_signature` (B1 licence, type authorisation, not before the task can finish) | `test_guards.py`, `test_hitl.py::test_full_departure_release_flow` |
 | Vulnerable-passenger priority | `guards.pax_tier`, `_priority_inversions`, UMNR/MEDA/PRM rules; planner orders P1 → P4 | `test_priority.py` |
 | LLM cannot bypass | Sealed module (`GuardTamperError`), frozen dataclasses, `MappingProxyType`, SHA-256 pin, strict arg schemas, no override params | `test_guards.py::test_guards_cannot_be_mutated`, `test_agent.py` (fake LLM tries override, illegal crew, self-approval, fact-bearing templates) |
@@ -206,6 +206,10 @@ tests/                     60 pytest tests
    GROQ_API_KEY = "gsk_..."
    ```
 5. Click **Deploy**. Pushing to `main` redeploys automatically.
+
+## Data and sources
+
+Every dataset, public source (EASA flight-time rules, Part-66, ICAO Annex 17, EU261 and its case law including *Gahan v Emirates*), and every modelling assumption is listed in **[docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)**.
 
 ## Honest limitations
 

@@ -113,7 +113,7 @@ CREATE TABLE crew(
   base TEXT NOT NULL, type_ratings TEXT NOT NULL, fitness TEXT NOT NULL DEFAULT 'FIT',
   duty_kind TEXT NOT NULL, duty_start TEXT, sectors_flown INTEGER NOT NULL DEFAULT 0,
   rest_before_duty_min INTEGER NOT NULL, location TEXT NOT NULL, proximity_min INTEGER NOT NULL,
-  notes TEXT NOT NULL DEFAULT '');
+  notes TEXT NOT NULL DEFAULT '', standby_kind TEXT, standby_start TEXT);
 
 CREATE TABLE crew_assignments(
   flight_id TEXT NOT NULL REFERENCES flights(flight_id), crew_id TEXT NOT NULL REFERENCES crew(crew_id),

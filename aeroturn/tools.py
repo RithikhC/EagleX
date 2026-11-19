@@ -341,7 +341,8 @@ def _stage(conn, change_type: str, flight: dict, details: dict, justification: s
     dup = db.one(conn, """SELECT * FROM schedule_changes WHERE change_type = ? AND flight_id = ? AND payload = ?
                           AND status = 'PENDING'""", (change_type, flight["flight_id"], json.dumps(details, sort_keys=True)))
     if dup:
-        return {"change_id": dup["change_id"], "status": "PENDING", "duplicate": True,
+        return {"change_id": dup["change_id"], "change_type": change_type, "flight": flight["flight_no"],
+                "status": "PENDING", "duplicate": True,
                 "message": "Identical change already awaiting the Operations Controller."}
     g = guard_for_change(conn, change_type, flight, details)
     status = "PENDING" if g["verdict"]["ok"] else "BLOCKED"

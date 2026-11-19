@@ -42,13 +42,13 @@ def test_fatigue_rating_rest_and_reachability(conn):
     assert "FTL-006" in rules("S-02", "15:50", "15:35")
 
 
-def test_airport_standby_counts_in_full(conn):
+def test_long_airport_standby_reduces_fdp(conn):
     early = guards.check_crew_for_sector(_crew(conn, "S-01"), aircraft_type="B777", off_blocks=at("17:15"),
                                          block_min=420, report_time=at("15:06"))
     late = guards.check_crew_for_sector(_crew(conn, "S-04"), aircraft_type="B777", off_blocks=at("17:15"),
                                         block_min=420, report_time=at("15:09"))
     assert not early.ok and late.ok
-    assert late.facts["margin_min"] == 135
+    assert late.facts["margin_min"] == 174  # FDP from report 15:09, max 12:00 -> 03:09; on-blocks 00:15
 
 
 def _mx(status="OPEN", licence=None, auth=()):

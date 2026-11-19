@@ -8,7 +8,7 @@ def test_standby_matcher_picks_nearest_legal_captain(conn):
     assert r["selected"]["crew_id"] == "S-04"
     why = {c["crew_id"]: {v["rule"] for v in c["violations"]} for c in r["candidates"]}
     assert why["C-A01"] == {"FTL-001"}   # inbound captain: physically closest, legally impossible
-    assert why["S-01"] == {"FTL-001"}    # airport standby since 06:00 counts in full
+    assert why["S-01"] == {"FTL-001"}    # 9h airport standby: max FDP cut by 5h06 (beyond 4h), 16h cap
     assert why["S-03"] == {"FTL-003"}    # A380-only
     assert why["S-05"] == {"FTL-002"}    # 9h rest
     assert why["S-02"] == set()          # legal but 35 min away

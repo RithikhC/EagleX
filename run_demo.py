@@ -19,6 +19,7 @@ os.environ.setdefault("AEROTURN_RUNTIME_DIR", str(Path(__file__).resolve().paren
 from aeroturn import agent, audit, config, db, faults, hitl, lab, llm, tools, turnaround  # noqa: E402
 
 os.system("")  # enable ANSI colours on Windows terminals
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # LLM text may contain any Unicode
 C = {"llm": "\033[95m", "tool": "\033[94m", "guard": "\033[91m", "hitl": "\033[93m", "ok": "\033[92m",
      "dim": "\033[90m", "b": "\033[1m", "x": "\033[0m"}
 LANE = {"llm": ("llm", "LLM"), "policy": ("llm", "POLICY"), "thinking": ("dim", "THINK"), "tool_call": ("tool", "TOOL"),

@@ -64,7 +64,7 @@ def passenger_cost(conn, pax: dict, orig_flight: dict, new_flight: dict | None, 
     covered = _eu_origin(conn, pax["journey_origin"])
     eu = eu261_amount(distance, delay) if covered else 0
     if pax["is_infant"]:
-        eu = 0  # infants travelling free of charge are excluded (Art. 3(3))
+        eu = 0  # assumption: lap-infant ticket issued free of charge -> outside scope (Art. 3(3))
     meals = config.MEAL_VOUCHER_EUR if wait >= 120 else 0
     overnight = new_std.date() > orig_std.date()
     hotel = config.HOTEL_NIGHT_EUR if overnight else 0

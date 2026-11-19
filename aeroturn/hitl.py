@@ -127,9 +127,12 @@ def _apply(conn, change_type: str, flight: dict, details: dict, derived: dict) -
             conn.execute("UPDATE crew_assignments SET status = 'REMOVED' WHERE flight_id = ? AND crew_id = ?",
                          (fid, details["remove_crew_id"]))
         row = db.one(conn, "SELECT * FROM crew WHERE crew_id = ?", (details["add_crew_id"],))
-        duty_start = row["duty_start"] if row["duty_kind"] == "AIRPORT_STANDBY" else derived["report_at"]
-        conn.execute("UPDATE crew SET duty_kind = 'ON_DUTY', duty_start = ?, location = ? WHERE crew_id = ?",
-                     (duty_start, f"Assigned {flight['flight_no']}", row["crew_id"]))
+        sb_kind = {"AIRPORT_STANDBY": "AIRPORT", "HOME_STANDBY": "HOME"}.get(row["duty_kind"])
+        # FDP counts from reporting; remember the standby so its 4h/6h reduction and 16h cap still apply
+        conn.execute("UPDATE crew SET duty_kind = 'ON_DUTY', duty_start = ?, location = ?, standby_kind = ?, "
+                     "standby_start = ? WHERE crew_id = ?",
+                     (derived["report_at"], f"Assigned {flight['flight_no']}", sb_kind,
+                      row["duty_start"] if sb_kind else None, row["crew_id"]))
         conn.execute("INSERT OR REPLACE INTO crew_assignments VALUES(?,?,?,?,?)",
                      (fid, row["crew_id"], details.get("role", row["rank"]), "ASSIGNED", derived["report_at"]))
     elif change_type == "RETIME":

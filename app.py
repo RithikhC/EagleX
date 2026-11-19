@@ -330,7 +330,8 @@ with st.sidebar:
     if info["provider"] == "offline":
         st.caption(f"🧠 **Offline policy** (no LLM): {info.get('reason', '')}")
     else:
-        st.caption(f"🧠 **{info['model']}** via {info['provider']}")
+        _mode = agent.MODE_LABELS[agent.agent_mode(llm.make_client(info))]
+        st.caption(f"🧠 **{info['model']}** via {info['provider']} · {_mode}")
     if st.button("Re-detect LLM", width="stretch"):
         ss.pop("brain_cache", None)
         st.rerun()

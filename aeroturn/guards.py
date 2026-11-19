@@ -20,9 +20,10 @@ That is deliberate.
 Regulatory basis (simplified, for the hackathon scenario):
   * FDP table modelled on EASA ORO.FTL.205 Table 2 (acclimatised crew),
     with -30 min per sector above 2 and a 9h floor. Commander's discretion
-    can never be planned. Airport standby counts in full toward FDP
-    (conservative). Home standby beyond 6h reduces the max FDP.
-  * Minimum rest 12h. Fatigue/sick reports are absolute.
+    can never be planned. Standby per CS FTL.1.225: FDP counts from
+    reporting; airport standby beyond 4h reduces the max FDP and airport
+    standby + FDP <= 16h; home standby beyond 6h reduces the max FDP.
+  * Minimum rest 12h at home base (ORO.FTL.235). Fatigue/sick reports are absolute.
   * Dispatch-blocking deferred defects need a CRS from an appropriately
     licensed (B1 for mechanical systems) and type-authorised engineer, signed
     no earlier than the end of the inspection task.
@@ -92,6 +93,8 @@ class SafetyLimits:
     fdp_floor_min: int = 9 * 60
     min_rest_min: int = 12 * 60
     home_standby_free_min: int = 6 * 60
+    airport_standby_free_min: int = 4 * 60
+    airport_standby_plus_fdp_max_min: int = 16 * 60
     planned_discretion_min: int = 0          # commander's discretion is never planned
     callout_response_min: int = 10           # time to acknowledge a standby call-out
     report_before_off_blocks_min: int = 45   # crew must be at the aircraft this early
@@ -206,6 +209,8 @@ class CrewFacts:
     sectors_flown: int = 0
     rest_before_duty_min: int = 24 * 60
     proximity_min: int = 0
+    standby_kind: str | None = None        # AIRPORT / HOME when an ON_DUTY crew member was called from standby
+    standby_start: datetime | None = None  # when that standby began
 
 
 def max_fdp_minutes(fdp_start: datetime, sectors: int) -> int:
@@ -223,25 +228,36 @@ def max_fdp_minutes(fdp_start: datetime, sectors: int) -> int:
 
 
 def fdp_window(crew: CrewFacts, *, report_time: datetime | None, sectors_total: int) -> dict:
-    """Legal FDP window for a crew member. Returns start, limit and basis."""
+    """Legal FDP window for a crew member. Returns start, limit and basis.
+
+    Standby (CS FTL.1.225): the FDP counts from reporting. Airport standby: max FDP reduced by standby time
+    beyond 4h, and airport standby + FDP <= 16h. Home standby: max FDP reduced by standby time beyond 6h.
+    """
     kind = crew.duty_kind
     if kind in ("ON_DUTY", "ROSTERED"):
         start = crew.duty_start
-        reduction = 0
-        basis = f"report {start:%H:%M}"
+        sb_kind, sb_start = crew.standby_kind, crew.standby_start
     elif kind == "AIRPORT_STANDBY":
-        start = crew.duty_start
-        reduction = 0
-        basis = f"airport standby from {start:%H:%M} counts in full"
+        start, sb_kind, sb_start = report_time or crew.duty_start, "AIRPORT", crew.duty_start
     elif kind == "HOME_STANDBY":
-        start = report_time
-        standby_min = int((report_time - crew.duty_start).total_seconds() // 60) if crew.duty_start else 0
-        reduction = max(0, standby_min - LIMITS.home_standby_free_min)
-        basis = f"home standby, report {start:%H:%M}" + (f", -{reduction}m standby >6h" if reduction else "")
+        start, sb_kind, sb_start = report_time or crew.duty_start, "HOME", crew.duty_start
     else:
         return {"start": None, "limit": None, "max_min": 0, "basis": "not on duty or standby"}
+    reduction, cap, basis = 0, None, f"report {start:%H:%M}"
+    if sb_kind and sb_start:
+        standby_min = max(0, int((start - sb_start).total_seconds() // 60))
+        free = LIMITS.airport_standby_free_min if sb_kind == "AIRPORT" else LIMITS.home_standby_free_min
+        reduction = max(0, standby_min - free)
+        basis = (f"{sb_kind.lower()} standby from {sb_start:%H:%M}, report {start:%H:%M}"
+                 + (f", -{reduction}m for standby >{free // 60}h" if reduction else ""))
+        if sb_kind == "AIRPORT":
+            cap = sb_start + timedelta(minutes=LIMITS.airport_standby_plus_fdp_max_min)
     max_min = max_fdp_minutes(start, sectors_total) - reduction + LIMITS.planned_discretion_min
-    return {"start": start, "limit": start + timedelta(minutes=max_min), "max_min": max_min,
+    limit = start + timedelta(minutes=max_min)
+    if cap is not None and cap < limit:
+        limit, max_min = cap, int((cap - start).total_seconds() // 60)
+        basis += f", capped at standby+FDP {LIMITS.airport_standby_plus_fdp_max_min // 60}h"
+    return {"start": start, "limit": limit, "max_min": max_min,
             "basis": f"{basis}; {sectors_total} sector(s) -> max FDP {max_min // 60}h{max_min % 60:02d}"}
 
 

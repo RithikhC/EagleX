@@ -23,7 +23,8 @@ def crew_facts(row: dict) -> guards.CrewFacts:
         type_ratings=tuple(x.strip() for x in row["type_ratings"].split(",")),
         fitness=row["fitness"], duty_kind=row["duty_kind"], duty_start=parse(row["duty_start"]),
         sectors_flown=row["sectors_flown"], rest_before_duty_min=row["rest_before_duty_min"],
-        proximity_min=row["proximity_min"])
+        proximity_min=row["proximity_min"], standby_kind=row.get("standby_kind"),
+        standby_start=parse(row.get("standby_start")))
 
 
 def pax_facts(row: dict, bag_count: int | None = None) -> guards.PaxFacts:

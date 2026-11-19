@@ -487,7 +487,7 @@ def build_dataset(db_path: Path, snapshot_path: Path | None = None) -> dict:
 
     # ---- crew
     for (cid, name, rank, ratings, fit, kind, start, sectors, rest, loc, prox, notes, asg) in CREW:
-        conn.execute("INSERT INTO crew VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        conn.execute("INSERT INTO crew VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)",
                      (cid, name, rank, "DXB", ratings, fit, kind, fmt(at(start)) if start else None, sectors, rest,
                       loc, prox, notes))
         if asg:
@@ -499,7 +499,7 @@ def build_dataset(db_path: Path, snapshot_path: Path | None = None) -> dict:
         for k in range(11):
             cid = f"{prefix}{k + 3:02d}"
             rank = "PUR" if k == 0 else "CC"
-            conn.execute("INSERT INTO crew VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            conn.execute("INSERT INTO crew VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)",
                          (cid, f"{'Purser' if rank == 'PUR' else 'CC'} {next(names)}", rank, "DXB", "B777", "FIT",
                           status, fmt(at(start)), 2 if prefix == "C-A" else 0, 15 * 60 if prefix == "C-A" else 24 * 60,
                           loc, prox, ""))
