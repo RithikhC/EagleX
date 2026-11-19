@@ -1,0 +1,10 @@
+{
+  "at_risk": "45 → 0",
+  "vulnerable": "10/10",
+  "legacy": "AED 133,390",
+  "aeroturn": "AED 50,440",
+  "same_day": "45/45",
+  "naive_h": "A naive optimiser breaks 15 rules",
+  "agent_note": "Real run with openai/gpt-oss-120b on Groq, Chaos on. The LLM picked stand C31 and Captain Mehta. Its first retime was too early, so the guard blocked it (TURN-001) and the model corrected itself. A seat sold mid-batch rolled the rebooking back, and the retry committed 45 passengers and 48 bags in one transaction.",
+  "cost_note": "In this run the controller queue held no connection hold, so all 45 passengers were rebooked: AED 50,440 against AED 133,390 for legacy next-day re-protection, a 62% saving. With the EK418 hold it falls to AED 40,200."
+}

@@ -1,5 +1,8 @@
 # AeroTurn: pitch outline and judge Q&A
 
+The slides are in [AeroTurn_Deck.pptx](AeroTurn_Deck.pptx) (17 slides, real demo screenshots, speaker notes on
+every slide). This file is the talk track and the judge Q&A.
+
 ## Slide outline (8 slides, 3 minutes before the live demo)
 
 1. **The 75-minute problem.** One late wide-body is a network event: gates, crew duty clocks, bags, 280

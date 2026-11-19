@@ -8,12 +8,17 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
+**Pitch deck: [docs/AeroTurn_Deck.pptx](docs/AeroTurn_Deck.pptx)**. 17 slides built from real screenshots of the
+demo: every scenario, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
+business case, and the datasets and sources on the thank-you slide. Rebuild it with `scripts/deck/`
+(headless-Chrome capture, crop, pptxgenjs).
+
 > A Boeing 777 lands 75 minutes late at Dubai with 280 connecting passengers. The inbound crew is 20 minutes
 > from its legal duty limit, a hydraulic defect needs a licensed engineer's sign-off, and the outbound captain
 > has just filed a fatigue report. AeroTurn lets an LLM reason about the cascade while plain Python makes the
 > unsafe options impossible.
 
-![AeroTurn OCC console](docs/img/console.png)
+![AeroTurn OCC console after a recovery run](docs/img/demo/hero.png)
 
 ---
 
@@ -307,7 +312,7 @@ The 🧪 **Edge cases** tab runs the 13 cases above (one at a time or all at onc
 
 Detail tabs cover passengers, crew & duty, turnaround & MX, cost & network, and the audit log with the data sources.
 
-![dashboard panels](docs/img/dashboard_bottom.png)
+![recovery flow, priority queue and cost](docs/img/demo/agent_rowB.png)
 
 See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for the presentation run-sheet and [docs/PITCH.md](docs/PITCH.md)
 for the pitch and judge Q&A.

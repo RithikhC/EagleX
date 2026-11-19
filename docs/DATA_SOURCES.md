@@ -114,7 +114,8 @@ These are modelling choices. They are listed so judges can challenge them, and t
 | Unaccompanied minor protection | Home carrier only, no departure after 22:00, wait ≤ 8h | Typical airline UMNR policy |
 | Priority tiers P1–P4 | Defined in `guards.pax_tier` | Brief requires vulnerable-passenger priority protection |
 | Exit-row eligibility | No UMNR, reduced-mobility, medical, pregnant or infant passengers; age 15–74 | Typical exit-row policy |
-| Connection hold | Suggest only if ≤ 15 min and cheaper than rebooking; network cap 30 min | |
+| Connection hold | Suggest only if ≤ 15 min and at least AED 1,000 cheaper than rebooking; network cap 30 min. The hold length is chosen per passenger, so a short hold can protect most of a flight's connections | The delay estimate itself is uncertain |
+| Stranded passenger (no legal seat today) | Costed as the same flight +24h: hotel, meals and EU261 | Before this rule, a hold for the last flight of the day never looked worthwhile |
 | Meal voucher / hotel | AED 100 / AED 550 per passenger | |
 | Exchange rate | 1 EUR = 4.10 AED | Mid-market reference rate dated 27 Oct 2026 ([Key Currency](https://www.keycurrency.co.uk/convert-eur-to-aed/?amount=1)); set `EUR_TO_AED` to the day's rate |
 | Rotation buffer at CDG | 30 min | Used for the knock-on delay |
