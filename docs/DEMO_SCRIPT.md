@@ -2,6 +2,10 @@
 
 **Before you go on stage**
 
+Read [NUMBERS_EXPLAINED.md](NUMBERS_EXPLAINED.md): how every number on the dashboard is calculated, with
+answers for judges who challenge them.
+
+
 1. Open the live demo (https://aeroturn-eaglex.streamlit.app) or run `streamlit run app.py`, in full screen.
    The 📊 **Operations** dashboard opens first.
 2. Press **↺** (right end of the scenario bar). The clock should read 14:50, the KPIs 45 at risk / 0/10 vulnerable,

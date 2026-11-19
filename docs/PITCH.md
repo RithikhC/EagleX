@@ -1,7 +1,8 @@
 # AeroTurn: pitch outline and judge Q&A
 
 The slides are in [AeroTurn_Deck.pptx](AeroTurn_Deck.pptx) (17 slides, real demo screenshots, speaker notes on
-every slide). This file is the talk track and the judge Q&A.
+every slide). This file is the talk track and the judge Q&A. The arithmetic behind every number is in
+[NUMBERS_EXPLAINED.md](NUMBERS_EXPLAINED.md).
 
 ## Slide outline (8 slides, 3 minutes before the live demo)
 

@@ -13,6 +13,9 @@ demo: every scenario, the 13 edge cases, how AeroTurn plugs into an airline's sy
 business case, and the datasets and sources on the thank-you slide. Rebuild it with `scripts/deck/`
 (headless-Chrome capture, crop, pptxgenjs).
 
+**Every number explained: [docs/NUMBERS_EXPLAINED.md](docs/NUMBERS_EXPLAINED.md)**: the formula, inputs and
+arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261, hold and network costs).
+
 > A Boeing 777 lands 75 minutes late at Dubai with 280 connecting passengers. The inbound crew is 20 minutes
 > from its legal duty limit, a hydraulic defect needs a licensed engineer's sign-off, and the outbound captain
 > has just filed a fatigue report. AeroTurn lets an LLM reason about the cascade while plain Python makes the
