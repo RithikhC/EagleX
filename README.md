@@ -8,7 +8,7 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
-**Pitch deck: [docs/AeroTurn_Deck.pptx](docs/AeroTurn_Deck.pptx)**. 17 slides built from real screenshots of the
+**Pitch deck: [PowerPoint](docs/AeroTurn_Deck.pptx) · [PDF](docs/AeroTurn_Deck.pdf)**. 17 slides built from real screenshots of the
 demo: every scenario, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
 business case, and the datasets and sources on the thank-you slide. Rebuild it with `scripts/deck/`
 (headless-Chrome capture, crop, pptxgenjs).
