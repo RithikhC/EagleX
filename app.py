@@ -552,13 +552,14 @@ def cost_chart() -> go.Figure:
     for comp, name, col in (("eu261", "EU261", S1), ("hotel", "Hotel", S2), ("meals", "Meals", S3)):
         fig.add_trace(go.Bar(y=["Legacy +24h", "AeroTurn"], x=[leg[comp], aer[comp]], orientation="h", name=name,
                              marker=dict(color=col, line=dict(color=SURFACE, width=2)), width=0.55,
-                             hovertemplate=name + ": €%{x:,}<extra></extra>"))
+                             hovertemplate=name + ": AED %{x:,}<extra></extra>"))
     for y, tot in (("Legacy +24h", leg["total"]), ("AeroTurn", aer["total"])):
-        fig.add_annotation(x=tot, y=y, text=f"  €{tot:,}", showarrow=False, xanchor="left", font=dict(color=INK, size=12))
+        fig.add_annotation(x=tot, y=y, text=f"  AED {tot:,}", showarrow=False, xanchor="left",
+                           font=dict(color=INK, size=12))
     fig.update_yaxes(categoryorder="array", categoryarray=["AeroTurn", "Legacy +24h"], title=None)
-    fig.update_xaxes(title=None, tickprefix="€", tickformat="~s")
+    fig.update_xaxes(title=None, tickformat="~s", nticks=4)
     base_layout(fig, 210)
-    fig.update_layout(barmode="stack", margin=dict(l=8, r=70, t=26, b=8))
+    fig.update_layout(barmode="stack", margin=dict(l=8, r=96, t=26, b=8))
     return fig
 
 
@@ -727,7 +728,7 @@ with tabs[0]:
         kpi(k[6], "Controller queue", str(len(SNAP["pending"])), "gate · hold · crew · retime",
             "warn" if SNAP["pending"] else "good", "PENDING" if SNAP["pending"] else "EMPTY")
         sav = cst["savings"] if SNAP["rebook_order"] else 0
-        kpi(k[7], "Passenger cost saved", f"€{sav:,}", f"vs legacy €{cst['legacy_auto_reprotect']['total']:,}",
+        kpi(k[7], "Passenger cost saved", f"AED {sav:,}", f"vs legacy AED {cst['legacy_auto_reprotect']['total']:,}",
             "good" if sav > 0 else "info", "SAVED" if sav > 0 else "PENDING")
 
         st.write("")
@@ -777,14 +778,15 @@ with tabs[0]:
                                         "Tier": st.column_config.TextColumn(width="small"),
                                         "SSR": st.column_config.TextColumn(width="small")})
         with b3.container(border=True):
-            st.markdown("<div class='sec'>Compensation & care · legacy vs AeroTurn</div>", unsafe_allow_html=True)
+            st.markdown("<div class='sec'>Compensation & care (AED) · legacy vs AeroTurn</div>", unsafe_allow_html=True)
             st.plotly_chart(cost_chart(), config=PLOT_CFG, theme=None, key="cost")
             m1, m2 = st.columns(2)
             m1.metric("Same-day arrivals", f"{cst['aeroturn']['same_day']}/{cst['scope_passengers']}",
                       f"legacy {cst['legacy_auto_reprotect']['same_day']}", delta_color="off")
-            m2.metric("Network total", f"€{cst['network_total_aeroturn']:,}",
-                      f"legacy €{cst['network_total_legacy']:,}", delta_color="off")
-            st.markdown(f"<div class='small'>EK813 delay €{cst['outbound_rotation']['delay_cost']:,} · knock-on "
+            m2.metric("Network total", f"AED {cst['network_total_aeroturn'] / 1000:,.0f}k",
+                      f"legacy AED {cst['network_total_legacy'] / 1000:,.0f}k", delta_color="off")
+            st.markdown(f"<div class='small'>{cst['fx_note']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='small'>EK813 delay AED {cst['outbound_rotation']['delay_cost']:,} · knock-on "
                         f"{cst['outbound_rotation']['knock_on_return_delay_min']} min · holds "
                         f"{', '.join(cst['connection_holds']['flights']) or 'none'}</div>", unsafe_allow_html=True)
 
@@ -943,11 +945,15 @@ with tabs[4]:
         st.dataframe(pd.DataFrame([{"Flight": h["flight"], "Dest": h["dest"], "STD": h["std"], "Pax": h["pax_protected"],
                                     "Hold needed": f"{h['hold_needed_min']} min",
                                     "Cap ≤30": "ok" if h["allowed"] else "NET-001",
-                                    "Hold cost": f"€{h['hold_cost']:,}", "Rebook cost": f"€{h['rebook_cost']:,}",
-                                    "Net saving": f"€{h['net_saving']:,}",
+                                    "Hold cost": f"AED {h['hold_cost']:,}", "Rebook cost": f"AED {h['rebook_cost']:,}",
+                                    "Net saving": f"AED {h['net_saving']:,}",
                                     "Verdict": "HOLD" if h["recommended"] else "rebook", "Status": h["hold_status"]}
                                    for h in costs.hold_analysis(C)]), hide_index=True)
-        st.markdown("<div class='sec'>Per passenger (EU261 whole-journey from Larnaca)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='sec'>Per passenger, AED (EU261 whole-journey from Larnaca · {cst['fx_note']})</div>",
+                    unsafe_allow_html=True)
+        st.caption(f"Hold cost = minutes × (AED {config.DELAY_COST_AED_PER_MIN} aircraft + AED {config.PAX_MINUTE_AED:.2f} × "
+                   f"passengers on board). Meal voucher AED {config.MEAL_VOUCHER_AED}, hotel AED "
+                   f"{config.HOTEL_NIGHT_AED}. Assumptions, editable in aeroturn/config.py.")
         st.dataframe(pd.DataFrame(cst["per_passenger"]), hide_index=True, height=360)
 
 # ===========================================================================

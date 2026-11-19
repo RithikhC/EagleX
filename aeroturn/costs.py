@@ -7,6 +7,8 @@ EU261 basis used here (simplified, for illustration):
   * Final-arrival delay of 3h or more triggers compensation by great-circle
     distance origin -> final destination: <=1500 km EUR250, <=3500 km EUR400,
     >3500 km EUR600, halved for >3500 km when the delay is 3h-4h (Art. 7(2)(c)).
+  * All results are reported in AED. EU261 amounts stay in EUR by law and are
+    converted at config.EUR_TO_AED; the other rates are AED assumptions.
   * EK-813 departs DXB on a non-EU carrier, so EU261 does not apply to it.
     Its delay is costed with a per-minute tactical delay cost (assumption).
 Commercial rates are assumptions from config.py, not legal advice.
@@ -65,11 +67,12 @@ def passenger_cost(conn, pax: dict, orig_flight: dict, new_flight: dict | None, 
     eu = eu261_amount(distance, delay) if covered else 0
     if pax["is_infant"]:
         eu = 0  # assumption: lap-infant ticket issued free of charge -> outside scope (Art. 3(3))
-    meals = config.MEAL_VOUCHER_EUR if wait >= 120 else 0
+    meals = config.MEAL_VOUCHER_AED if wait >= 120 else 0
     overnight = new_std.date() > orig_std.date()
-    hotel = config.HOTEL_NIGHT_EUR if overnight else 0
-    return {"distance_km": distance, "arrival_delay_min": delay, "eu261": eu, "meals": meals, "hotel": hotel,
-            "total": eu + meals + hotel, "same_day": not overnight}
+    hotel = config.HOTEL_NIGHT_AED if overnight else 0
+    eu_aed = int(round(eu * config.EUR_TO_AED))
+    return {"distance_km": distance, "arrival_delay_min": delay, "eu261": eu_aed, "eu261_eur": eu, "meals": meals,
+            "hotel": hotel, "total": eu_aed + meals + hotel, "same_day": not overnight}
 
 
 def disruption_cost(conn: sqlite3.Connection, plan: dict | None = None) -> dict:
@@ -134,13 +137,13 @@ def disruption_cost(conn: sqlite3.Connection, plan: dict | None = None) -> dict:
     outbound = {
         "flight": out["flight_no"], "delay_min": out_delay, "pax": out["load_pax"],
         "eu261": 0, "eu261_note": "Departure from DXB on a non-EU carrier: EU261 not applicable",
-        "delay_cost": int(round(out_delay * (config.DELAY_COST_EUR_PER_MIN + config.PAX_MINUTE_EUR * out["load_pax"]))),
+        "delay_cost": int(round(out_delay * (config.DELAY_COST_AED_PER_MIN + config.PAX_MINUTE_AED * out["load_pax"]))),
         "knock_on_return_delay_min": knock_on,
-        "knock_on_cost": knock_on * config.DELAY_COST_EUR_PER_MIN,
+        "knock_on_cost": knock_on * config.DELAY_COST_AED_PER_MIN,
     }
     held = [f for f in flights.values() if f["status"] == "HELD" and f["etd"]]
     hold_cost = sum(int(round(minutes(parse(f["std"]), parse(f["etd"])) *
-                              (config.DELAY_COST_EUR_PER_MIN + config.PAX_MINUTE_EUR * f["load_pax"]))) for f in held)
+                              (config.DELAY_COST_AED_PER_MIN + config.PAX_MINUTE_AED * f["load_pax"]))) for f in held)
     outbound_hold = {"flights": [f["flight_no"] for f in held], "cost": hold_cost}
     savings = legacy["total"] - aero["total"]
     return {
@@ -153,8 +156,10 @@ def disruption_cost(conn: sqlite3.Connection, plan: dict | None = None) -> dict:
         "connection_holds": outbound_hold,
         "network_total_aeroturn": aero["total"] + outbound["delay_cost"] + outbound["knock_on_cost"] + hold_cost,
         "network_total_legacy": legacy["total"] + outbound["delay_cost"] + outbound["knock_on_cost"],
-        "assumptions": {"delay_cost_eur_per_min": config.DELAY_COST_EUR_PER_MIN,
-                        "meal_voucher_eur": config.MEAL_VOUCHER_EUR, "hotel_night_eur": config.HOTEL_NIGHT_EUR,
+        "fx_note": f"EU261 is fixed in EUR; shown at 1 EUR = {config.EUR_TO_AED:.2f} AED",
+        "assumptions": {"delay_cost_aed_per_min": config.DELAY_COST_AED_PER_MIN,
+                        "pax_minute_aed": config.PAX_MINUTE_AED, "eur_to_aed": config.EUR_TO_AED,
+                        "meal_voucher_aed": config.MEAL_VOUCHER_AED, "hotel_night_aed": config.HOTEL_NIGHT_AED,
                         "rotation_buffer_min": rotation_buffer},
         "per_passenger": per_pax,
     }
@@ -196,7 +201,7 @@ def hold_analysis(conn: sqlite3.Connection) -> list[dict]:
         std = parse(f["std"])
         need = max(max(minutes(std, plus(eibt, p["mct_min"])),
                        minutes(std, plus(eibt, LIMITS.bag_mct_min)) if p["bags"] else 0) for p in plist)
-        hold_cost = int(round(need * (config.DELAY_COST_EUR_PER_MIN + config.PAX_MINUTE_EUR * f["load_pax"])))
+        hold_cost = int(round(need * (config.DELAY_COST_AED_PER_MIN + config.PAX_MINUTE_AED * f["load_pax"])))
         rebook_cost = 0
         for p in plist:
             t = target.get(p["pax_id"])

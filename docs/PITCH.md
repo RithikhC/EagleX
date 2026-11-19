@@ -28,8 +28,8 @@
 8. **Impact.**
    - 45/45 connections recovered the same day (41 rebooked, 4 saved by an 8-min hold)
    - 10/10 vulnerable passengers protected
-   - Passenger compensation and care: EUR 33k → EUR 9.8k (−70%)
-   - Network cost: EUR 52k → EUR 31k
+   - Passenger compensation and care: AED 133k → AED 40k (−70%)
+   - Network cost: AED 206k → AED 121k
 
 ## Numbers to remember
 
@@ -41,9 +41,10 @@
 | Holding for planned stand B14 | in-block 15:55 → FDP breach by 15 min |
 | EK813 critical-path EOBT | 17:15 (+65), hydraulic inspection on critical path |
 | Standby captain chosen | S-04, 9 min away, FDP margin 2h54 |
-| Legacy vs AeroTurn passenger compensation + care | EUR 33,275 vs EUR 9,825 |
-| Network cost (incl. EK813 delay, knock-on, hold) | EUR 51,959 vs EUR 30,746 |
-| Connection hold staged | EK418 SYD +8 min: EUR 2,237 vs EUR 2,500 to rebook 4 pax ~6h later |
+| Legacy vs AeroTurn passenger compensation + care | AED 133,390 vs AED 40,200 (AED 50,440 with no hold) |
+| Network cost (incl. EK813 delay, knock-on, hold) | AED 205,955 vs AED 121,353 |
+| Currency | AED; EU261 fixed in EUR, converted at 1 EUR = 4.10 AED |
+| Connection hold staged | EK418 SYD +8 min: AED 8,588 vs AED 10,240 to rebook 4 pax ~6h later |
 | Same-day arrivals | 45/45 (legacy 0/45) |
 | Unconstrained plan | blocked: 15 violations across PAX-001/002/003/004/006 |
 | Tests | 60 passing |
@@ -103,9 +104,9 @@ getting the Bangkok passengers onto the 18:25 (arriving under 3h late) instead o
 financially, not just ethically.
 
 **"Why hold one flight but not the others?"**
-Hold cost = minutes × (aircraft cost + EUR 0.40 × every passenger on board), against the EU261 and care cost
+Hold cost = minutes × (AED 400 aircraft + AED 1.50 × every passenger on board), against the EU261 and care cost
 of rebooking. Only EK418 (8 min, 4 passengers) is cheaper to hold. Holding the Bangkok flight 55 minutes would
-cost EUR 15k to save EUR 2k, and is also above the 30-minute network cap (NET-001). The agent stages the hold,
+cost about AED 60k to save AED 8k, and is also above the 30-minute network cap (NET-001). The agent stages the hold,
 the planner leaves those 4 passengers alone, and if the controller rejects it, one click rebooks them
 atomically.
 

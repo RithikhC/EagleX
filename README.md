@@ -31,8 +31,11 @@ asleep, the first load takes about a minute.
 - 45/45 broken connections recovered: 41 rebooked atomically, and 4 kept on their flight by an 8-minute hold the
   controller approved.
 - 10/10 vulnerable passengers protected, and all 45 arrive the same day.
-- Passenger compensation and care fall from EUR 33,275 (legacy +24h re-protection) to EUR 9,825 (−70%).
-- Network cost, including the EK813 delay, the knock-on and the hold, falls from EUR 52.0k to EUR 30.7k.
+- Passenger compensation and care fall from AED 133,390 (legacy +24h re-protection) to AED 40,200 (−70%);
+  AED 50,440 if the controller rejects the hold and all 45 are rebooked.
+- Network cost, including the EK813 delay, the knock-on and the hold, falls from AED 206k to AED 121k.
+- All money is in UAE dirhams. EU261 amounts are fixed in EUR by law and converted at 1 EUR = 4.10 AED
+  (`aeroturn/config.py`).
 - 60 automated tests pass.
 
 ---
@@ -251,7 +254,7 @@ Panels:
 
 Detail tabs cover passengers, crew & duty, turnaround & MX, cost & network, and the audit log with the data sources.
 
-![dashboard, lower half](docs/img/dashboard_bottom.png)
+![dashboard panels](docs/img/dashboard_bottom.png)
 
 See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for the presentation run-sheet and [docs/PITCH.md](docs/PITCH.md)
 for the pitch and judge Q&A.

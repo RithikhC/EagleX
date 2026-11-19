@@ -38,7 +38,7 @@ Talk over the incident banner and the event feed:
   what's legal."
 - "Chaos sold a seat mid-batch. Rollback, re-plan, commit: 45 passengers and 48 bags in one transaction."
 
-KPIs flip to **0 CLEAR · 10/10 SAFE · 3 PENDING · €20,950 SAVED**, and the map arcs turn green.
+KPIs flip to **0 CLEAR · 10/10 SAFE · 3 PENDING · about AED 83k SAVED**, and the map arcs turn green.
 
 ## 1:30 · Guards vs a rogue AI (60 s)
 
@@ -88,7 +88,7 @@ KPIs: **MX-0412 Signed · EK813 RELEASED**.
 
 ## 5:25 · Close (35 s)
 
-Point at **Compensation & care**: legacy €33k against AeroTurn €12k, with 45/45 still arriving today. Then the
+Point at **Compensation & care**: legacy AED 133k against AeroTurn AED 50k, with 45/45 still arriving today. (EU261 is set in euros by law; the dashboard converts at 1 EUR = 4.10 AED.) Then the
 **Guard interventions** board and the **event feed**.
 
 > "The LLM decides what to try. Code decides what is allowed. A human decides what changes the network."

@@ -26,10 +26,11 @@ OUTBOUND_FLIGHT_ID = "EK813-1121"
 HOME_CARRIER = "EK"
 
 # Commercial assumptions (illustrative, editable, NOT safety rules)
-CURRENCY = "EUR"
-DELAY_COST_EUR_PER_MIN = 100      # tactical delay cost, wide-body aircraft (assumption)
-PAX_MINUTE_EUR = 0.40             # value of one passenger-minute of delay for those on board (assumption)
+# Money is reported in UAE dirhams. EU261 amounts are fixed in EUR by law and are converted at EUR_TO_AED.
+CURRENCY = "AED"
+EUR_TO_AED = 4.10                 # reference mid-market rate (27 Oct 2026); set to the day's rate
+DELAY_COST_AED_PER_MIN = 400      # tactical delay cost, wide-body aircraft (assumption, ~EUR 100)
+PAX_MINUTE_AED = 1.50             # value of one passenger-minute of delay for those on board (assumption)
 MAX_RECOMMENDED_HOLD_MIN = 15     # commercial policy for suggesting a connection hold (the safety cap is in guards)
-MEAL_VOUCHER_EUR = 25             # right-to-care meal voucher per passenger
-HOTEL_NIGHT_EUR = 150             # overnight accommodation + transport per passenger
-GOODWILL_VULNERABLE_EUR = 0       # optional goodwill gesture, off by default
+MEAL_VOUCHER_AED = 100            # right-to-care meal voucher per passenger
+HOTEL_NIGHT_AED = 550             # overnight accommodation + transport per passenger

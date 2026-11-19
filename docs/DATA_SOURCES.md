@@ -75,7 +75,7 @@ The brief suggests OpenSky and OurAirports. We use OurAirports-style airport ref
 | Rule | What we implemented | Source |
 |---|---|---|
 | A bag never travels without its passenger (PPBM) | DB trigger, deferred foreign key and guard BAG-001 | ICAO Annex 17 passenger/baggage reconciliation (Standard 4.5.3, renumbered 4.5.6 in 2022): [IATA Hold Baggage Reconciliation (2025)](https://www.iata.org/contentassets/1998554ac6624b97a2de8418938eaade/2025-hold-baggage-reconciliation-iata2025.pdf) |
-| EU261 compensation amounts | €250 (≤1,500 km), €400 (≤3,500 km), €600 (>3,500 km); halved for >3,500 km when arrival is 3–4h late | Reg. (EC) 261/2004 Art. 7: [text](https://www.legislation.gov.uk/eur/2004/261/article/7); reduction thresholds: [European Parliament factsheet](https://www.europarl.europa.eu/erpl-app-public/factsheets/pdf/en/FTU_2.2.3.pdf) |
+| EU261 compensation amounts | €250 (≤1,500 km), €400 (≤3,500 km), €600 (>3,500 km); halved for >3,500 km when arrival is 3–4h late. Fixed in EUR by law; the dashboard reports them in AED at 1 EUR = 4.10 AED | Reg. (EC) 261/2004 Art. 7: [text](https://www.legislation.gov.uk/eur/2004/261/article/7); reduction thresholds: [European Parliament factsheet](https://www.europarl.europa.eu/erpl-app-public/factsheets/pdf/en/FTU_2.2.3.pdf) |
 | Long delay = compensation | Arrival delay of 3h or more | CJEU C-402/07 *Sturgeon*: [judgment](https://mansfield.bailii.org/eu/cases/EUECJ/2009/C40207.html) |
 | Measured at the final destination, whole journey from the EU | Compensation follows the final-arrival delay of the single-booking journey that started in Larnaca | CJEU C-11/11 *Folkerts*; CJEU C-537/17 *Wegener*: [CURIA press release](https://curia.europa.eu/jcms/upload/docs/application/pdf/2018-05/cp180077en.pdf); applied to an Emirates connection via Dubai in *Gahan v Emirates* [2017] EWCA Civ 1530: [judgment](https://caselaw.nationalarchives.gov.uk/ewca/civ/2017/1530) |
 | Right to care | Meals for long waits, hotel when overnight | Reg. 261/2004 Art. 9: [text](https://www.legislation.gov.uk/eur/2004/261/article/9) |
@@ -86,7 +86,7 @@ The brief suggests OpenSky and OurAirports. We use OurAirports-style airport ref
 
 | Value | Ours | Public reference |
 |---|---|---|
-| Aircraft tactical delay cost | €100/min plus €0.40 per passenger-minute, as an **illustrative assumption** | The EUROCONTROL / University of Westminster reference values are the standard European source: [EUROCONTROL, cost of one minute of delay](https://www.eurocontrol.int/publication/evaluating-true-cost-airlines-one-minute-airborne-or-ground-delay); [Westminster, cost of delay to air transport in Europe](https://westminsterresearch.westminster.ac.uk/item/90w7x/the-cost-of-delay-to-air-transport-in-europe-quantification-and-management). EUROCONTROL's Standard Inputs are reported at about €166/min at gate for tactical delay, so our figure is conservative |
+| Aircraft tactical delay cost | AED 400/min (≈ €100) plus AED 1.50 per passenger-minute, as an **illustrative assumption** | The EUROCONTROL / University of Westminster reference values are the standard European source: [EUROCONTROL, cost of one minute of delay](https://www.eurocontrol.int/publication/evaluating-true-cost-airlines-one-minute-airborne-or-ground-delay); [Westminster, cost of delay to air transport in Europe](https://westminsterresearch.westminster.ac.uk/item/90w7x/the-cost-of-delay-to-air-transport-in-europe-quantification-and-management). EUROCONTROL's Standard Inputs are reported at about €166/min (≈ AED 680) at gate for tactical delay, so our figure is conservative |
 
 ---
 
@@ -115,7 +115,8 @@ These are modelling choices. They are listed so judges can challenge them, and t
 | Priority tiers P1–P4 | Defined in `guards.pax_tier` | Brief requires vulnerable-passenger priority protection |
 | Exit-row eligibility | No UMNR, reduced-mobility, medical, pregnant or infant passengers; age 15–74 | Typical exit-row policy |
 | Connection hold | Suggest only if ≤ 15 min and cheaper than rebooking; network cap 30 min | |
-| Meal voucher / hotel | €25 / €150 per passenger | |
+| Meal voucher / hotel | AED 100 / AED 550 per passenger | |
+| Exchange rate | 1 EUR = 4.10 AED | Mid-market reference rate dated 27 Oct 2026 ([Key Currency](https://www.keycurrency.co.uk/convert-eur-to-aed/?amount=1)); set `EUR_TO_AED` to the day's rate |
 | Rotation buffer at CDG | 30 min | Used for the knock-on delay |
 | Standby call-out response / report-before-off-blocks | 10 min / 45 min | |
 | Turnaround task durations | e.g. deplaning 25, cleaning 30, catering 35, hydraulic inspection 55, boarding 35 min | Estimates for a 777 turn |

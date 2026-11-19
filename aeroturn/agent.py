@@ -249,6 +249,7 @@ class AeroTurnAgent:
             "standby_captains": [{"crew_id": c["crew_id"], "name": c["name"], "legal": c["legal"],
                                   "minutes_away": c["proximity_min"], "fdp_margin": c["margin"],
                                   "blocked_by": [v["rule"] for v in c["violations"]]} for c in sc["candidates"]],
+            "money_currency": "AED",
             "critical_path": {"eobt": cpm["eobt_hm"], "path": cpm["critical_path"], "std": cpm["std_hm"]},
             "connections": s["connections"],
             "vulnerable_passengers": [f"{p['name']} ({p['ssr'] or p['tier_label']}) to {p['dest']}, missed "
@@ -429,13 +430,13 @@ class AeroTurnAgent:
             for rec in hd["recommended"]:
                 opt = next(o for o in hd["options"] if o["flight"] == rec["flight_no"])
                 say(f"Holding {rec['flight_no']} to {opt['dest']} for {rec['hold_min']} min protects "
-                    f"{opt['pax_protected']} connections for EUR {opt['hold_cost']:,} versus EUR {opt['rebook_cost']:,} "
+                    f"{opt['pax_protected']} connections for AED {opt['hold_cost']:,} versus AED {opt['rebook_cost']:,} "
                     f"to rebook them hours later. Other holds cost more than they save. Staging the hold.")
                 self.call("stage_controller_schedule_change", {
                     "change_type": "HOLD_FLIGHT", "flight_no": rec["flight_no"],
                     "details": {"hold_min": rec["hold_min"]},
                     "justification": f"{opt['pax_protected']} EK812 connections protected; net saving "
-                                     f"EUR {rec['net_saving']:,}; {opt['onboard_pax_delayed']} on board delayed "
+                                     f"AED {rec['net_saving']:,}; {opt['onboard_pax_delayed']} on board delayed "
                                      f"{rec['hold_min']} min."})
         if wanted("CREW_SWAP"):
             sc = self.call("find_standby_crew", {"flight_no": "EK813", "rank": "CPT"})
@@ -491,8 +492,8 @@ class AeroTurnAgent:
         if wanted("compute_disruption_cost"):
             c = self.call("compute_disruption_cost")
             if not only_missing:
-                say(f"Cost: AeroTurn EUR {c['aeroturn']['total']:,} vs legacy auto-reprotect "
-                    f"EUR {c['legacy_auto_reprotect']['total']:,}. Saves EUR {c['savings']:,}, and "
+                say(f"Cost: AeroTurn AED {c['aeroturn']['total']:,} vs legacy auto-reprotect "
+                    f"AED {c['legacy_auto_reprotect']['total']:,}. Saves AED {c['savings']:,}, and "
                     f"{c['aeroturn']['same_day']} passengers still reach their destination today.")
         if not only_missing:
             pend = db.one(self.conn, "SELECT COUNT(*) AS n FROM schedule_changes WHERE status = 'PENDING'")["n"]

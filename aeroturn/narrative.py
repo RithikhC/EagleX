@@ -72,7 +72,7 @@ def brief_facts(conn: sqlite3.Connection) -> dict:
         "transactions": [t["outcome"] for t in txns],
         "guard_blocks": len(blocks),
         "guard_interventions": interventions,
-        "cost_eur": {"legacy": c["legacy_auto_reprotect"]["total"], "aeroturn": c["aeroturn"]["total"],
+        "cost_aed": {"legacy": c["legacy_auto_reprotect"]["total"], "aeroturn": c["aeroturn"]["total"],
                      "savings": c["savings"], "eu261_aeroturn": c["aeroturn"]["eu261"],
                      "eu261_legacy": c["legacy_auto_reprotect"]["eu261"],
                      "outbound_delay_cost": c["outbound_rotation"]["delay_cost"]},
@@ -108,9 +108,9 @@ def template_brief(f: dict) -> str:
         "",
         f"**Maintenance.** " + "; ".join(f"{m['item']} {m['title']}: {m['crs']}" for m in f["maintenance"]),
         "",
-        f"**Cost.** AeroTurn EUR {f['cost_eur']['aeroturn']:,} vs legacy auto-reprotect EUR {f['cost_eur']['legacy']:,} "
-        f"(saves EUR {f['cost_eur']['savings']:,}; EU261 EUR {f['cost_eur']['eu261_aeroturn']:,} vs "
-        f"EUR {f['cost_eur']['eu261_legacy']:,}). {f['same_day_arrivals']} passengers still travel today.",
+        f"**Cost.** AeroTurn AED {f['cost_aed']['aeroturn']:,} vs legacy auto-reprotect AED {f['cost_aed']['legacy']:,} "
+        f"(saves AED {f['cost_aed']['savings']:,}; EU261 AED {f['cost_aed']['eu261_aeroturn']:,} vs "
+        f"AED {f['cost_aed']['eu261_legacy']:,}). {f['same_day_arrivals']} passengers still travel today.",
     ]
     return "\n".join(lines)
 
@@ -126,7 +126,7 @@ Situation, Decisions awaiting you, Executed (atomic), Safety guard interventions
 "Decisions awaiting you" lists ONLY awaiting_controller. "Executed (atomic)" lists ONLY executed_atomically
 (staged changes are NOT executed). "Safety guard interventions" lists ONLY guard_interventions, verbatim in meaning.
 Use ONLY facts and numbers from the JSON below. Do not invent any number, time, flight or name.
-Write amounts like EUR 12,325.
+All money is in UAE dirhams: write amounts like AED 50,532.
 Be direct and specific; the controller must decide quickly.
 
 FACTS:

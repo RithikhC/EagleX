@@ -292,8 +292,8 @@ def guard_for_change(conn: sqlite3.Connection, change_type: str, flight: dict, d
         derived = {"new_etd": fmt(plus(std, hold)), "valid_until": fmt(plus(std, -5)), "hold_min": hold}
         econ = next((r for r in costs.hold_analysis(conn) if r["flight_id"] == flight["flight_id"]), None)
         if econ and econ["hold_status"] == "-":   # record the economics at proposal time
-            derived.update(hold_cost=int(round(hold * (config.DELAY_COST_EUR_PER_MIN +
-                                                       config.PAX_MINUTE_EUR * flight["load_pax"]))),
+            derived.update(hold_cost=int(round(hold * (config.DELAY_COST_AED_PER_MIN +
+                                                       config.PAX_MINUTE_AED * flight["load_pax"]))),
                            rebook_cost=econ["rebook_cost"], pax_protected=econ["pax_protected"])
     elif change_type == "DEPARTURE_RELEASE":
         off = parse(str(details.get("off_blocks", "")))
