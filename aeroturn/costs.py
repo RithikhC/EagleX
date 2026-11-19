@@ -32,18 +32,28 @@ def eu261_amount(distance_km: int, arrival_delay_min: int) -> int:
     return 300 if arrival_delay_min < 240 else 600
 
 
+_AIRPORTS: dict[str, dict] = {}   # reference data never changes during a scenario: read once per process
+
+
+def _airports(conn) -> dict[str, dict]:
+    if not _AIRPORTS:
+        _AIRPORTS.update({r["code"]: dict(r) for r in conn.execute("SELECT code, lat, lon, is_eu FROM airports")})
+    return _AIRPORTS
+
+
 def _coords(conn) -> dict:
-    return {r["code"]: (r["lat"], r["lon"]) for r in conn.execute("SELECT code, lat, lon FROM airports")}
+    return {k: (v["lat"], v["lon"]) for k, v in _airports(conn).items()}
 
 
 def _eu_origin(conn, code: str) -> bool:
-    r = db.one(conn, "SELECT is_eu FROM airports WHERE code = ?", (code,))
-    return bool(r and r["is_eu"])
+    a = _airports(conn).get(code)
+    return bool(a and a["is_eu"])
 
 
 def passenger_cost(conn, pax: dict, orig_flight: dict, new_flight: dict | None, *, new_sta=None, new_std=None) -> dict:
-    coords = _coords(conn)
-    distance = haversine_km(coords[pax["journey_origin"]], coords[pax["final_dest"]])
+    ap = _airports(conn)
+    distance = haversine_km((ap[pax["journey_origin"]]["lat"], ap[pax["journey_origin"]]["lon"]),
+                            (ap[pax["final_dest"]]["lat"], ap[pax["final_dest"]]["lon"]))
     orig_sta = parse(orig_flight["sta"])
     orig_std = parse(orig_flight["std"])
     if new_flight is not None:
