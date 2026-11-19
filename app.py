@@ -1,4 +1,4 @@
-"""AeroTurn OCC console (Streamlit).
+"""AeroTurn OCC dashboard (Streamlit).
 
     streamlit run app.py
 """
@@ -10,6 +10,7 @@ import json
 import os
 import re
 import uuid
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -18,56 +19,77 @@ import streamlit as st
 
 from aeroturn import (agent, audit, config, costs, crew, db, faults, guards, hitl, lab, llm, narrative, recovery,
                       tools, turnaround)
-from aeroturn.timeutil import dur, hm, minutes, parse, plus
+from aeroturn.facts import pax_facts
+from aeroturn.timeutil import dur, hm, minutes, parse
 
-st.set_page_config(page_title="AeroTurn OCC", page_icon="✈️", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="AeroTurn OCC", page_icon="✈️", layout="wide", initial_sidebar_state="collapsed")
 
-st.markdown("""
+# ---------------------------------------------------------------------------
+# palette (validated with the dataviz validator, dark surface #1a1a19)
+# ---------------------------------------------------------------------------
+SURFACE, PAGE = "#1a1a19", "#0d0d0d"
+INK, INK2, MUTED, GRID, AXIS = "#f0efec", "#c3c2b7", "#898781", "#2c2c2a", "#383835"
+S1, S2, S3 = "#3987e5", "#d95926", "#199e70"                  # categorical slots 1-3
+GOOD, WARN, SERIOUS, CRIT = "#0ca30c", "#fab219", "#ec835a", "#d03b3b"   # status (always with icon + label)
+TIER = {1: "#b7d3f6", 2: "#6da7ec", 3: "#2a78d6", 4: "#1c5cab"}         # ordinal P1..P4
+SLACK = "#4b4a46"
+STATUS_ICON = {"good": "✓", "warn": "◆", "serious": "▲", "crit": "✕", "info": "●"}
+STATUS_COLOR = {"good": GOOD, "warn": WARN, "serious": SERIOUS, "crit": CRIT, "info": S1}
+
+st.markdown(f"""
 <style>
-.block-container {padding-top: 1.2rem; padding-bottom: 3rem;}
-.lane {border-left: 4px solid #64748b; padding: 7px 12px; margin: 5px 0; border-radius: 8px;
-       background: rgba(148,163,184,.06); font-size: .92rem; line-height: 1.35;}
-.lane .tag {font-size: .68rem; font-weight: 800; letter-spacing: .06em; padding: 2px 7px; border-radius: 5px;
-            margin-right: 8px; white-space: nowrap;}
-.lane.llm {border-color:#a78bfa;} .lane.llm .tag {background:#a78bfa26; color:#c4b5fd;}
-.lane.thinking {border-color:#7c3aed; opacity:.8} .lane.thinking .tag {background:#7c3aed26; color:#a78bfa;}
-.lane.tool {border-color:#60a5fa;} .lane.tool .tag {background:#60a5fa26; color:#93c5fd;}
-.lane.guard {border-color:#f87171;} .lane.guard .tag {background:#f8717126; color:#fca5a5;}
-.lane.hitl {border-color:#fbbf24;} .lane.hitl .tag {background:#fbbf2426; color:#fcd34d;}
-.lane.ok {border-color:#2dd4bf;} .lane.ok .tag {background:#2dd4bf26; color:#5eead4;}
-.lane.bad {border-color:#fb7185;} .lane.bad .tag {background:#fb718526; color:#fda4af;}
-.lane.auto {border-color:#94a3b8;} .lane.auto .tag {background:#94a3b826; color:#cbd5e1;}
-.lane.sys {border-color:#38bdf8;} .lane.sys .tag {background:#38bdf826; color:#7dd3fc;}
-.vcard {border-radius: 12px; padding: 12px 14px; margin: 6px 0;}
-.vblock {background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.45);}
-.vpass {background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.45);}
-.vpend {background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.45);}
-.vtitle {font-weight: 800; font-size: 1.02rem; margin-bottom: 4px;}
-.rule {font-family: ui-monospace, Consolas, monospace; font-weight: 700; color: #fca5a5; margin-right: 6px;}
-.small {font-size: .82rem; opacity: .8}
-.hero {font-size: 1.55rem; font-weight: 800; margin: 0;}
-.sub {opacity: .75; margin-top: -2px;}
-.pill {display:inline-block; padding:2px 9px; border-radius:999px; font-size:.75rem; font-weight:700; margin-right:6px;}
-.p-llm {background:#a78bfa26; color:#c4b5fd} .p-code {background:#60a5fa26; color:#93c5fd}
-.p-guard {background:#f8717126; color:#fca5a5} .p-hitl {background:#fbbf2426; color:#fcd34d}
-.stepno {font-size: 1.05rem; font-weight: 800;}
+.stApp {{background:{PAGE};}}
+.block-container {{padding-top:.6rem; padding-bottom:2rem; max-width:100%;}}
+header[data-testid="stHeader"] {{background:transparent;}}
+div[data-testid="stVerticalBlockBorderWrapper"] {{background:{SURFACE}; border-color:rgba(255,255,255,.10)!important;
+  border-radius:12px;}}
+.hdr {{display:flex; align-items:center; justify-content:space-between; gap:18px; padding:4px 2px 10px 2px;}}
+.hdr .brand {{font-size:1.25rem; font-weight:800; letter-spacing:.04em; color:{INK};}}
+.hdr .brand span {{color:{MUTED}; font-weight:600; font-size:.85rem; letter-spacing:.02em; margin-left:10px;}}
+.hdr .clock {{font-size:1.9rem; font-weight:800; color:{INK}; line-height:1;}}
+.hdr .clock small {{font-size:.8rem; color:{MUTED}; font-weight:600; margin-left:6px;}}
+.badge {{display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:.78rem;
+  font-weight:700; border:1px solid rgba(255,255,255,.12); color:{INK2}; background:#232321; margin-left:6px;}}
+.badge i {{font-style:normal;}}
+.kpi {{background:{SURFACE}; border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px 12px 9px 12px;
+  height:100%;}}
+.kpi .lab {{font-size:.72rem; color:{MUTED}; font-weight:700; letter-spacing:.06em; text-transform:uppercase;}}
+.kpi .val {{font-size:1.75rem; font-weight:800; color:{INK}; line-height:1.15; margin-top:2px;}}
+.kpi .sub {{font-size:.78rem; color:{INK2}; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}}
+.st {{display:inline-flex; align-items:center; gap:5px; font-size:.72rem; font-weight:800; letter-spacing:.04em;}}
+.st b {{display:inline-block; width:16px; height:16px; border-radius:50%; text-align:center; line-height:16px;
+  font-size:.62rem; color:#0b0b0b;}}
+.sec {{font-size:.74rem; font-weight:800; letter-spacing:.08em; color:{MUTED}; text-transform:uppercase; margin:0 0 4px 2px;}}
+.inc {{border-radius:12px; padding:10px 14px; margin:2px 0 8px 0; border:1px solid; background:{SURFACE};}}
+.inc .t {{font-weight:800; color:{INK}; font-size:.98rem;}}
+.inc .l {{color:{INK2}; font-size:.84rem; margin-top:3px;}}
+.inc .r {{font-family:ui-monospace,Consolas,monospace; font-weight:700; color:{INK}; padding:1px 6px; border-radius:5px;
+  background:#2a2a28; margin-right:6px; font-size:.78rem;}}
+.ev {{border-left:3px solid {AXIS}; padding:5px 10px; margin:4px 0; border-radius:6px; background:#20201e; font-size:.84rem;
+  color:{INK2};}}
+.ev .k {{font-size:.64rem; font-weight:800; letter-spacing:.06em; margin-right:8px; color:{INK};}}
+.chip {{display:inline-block; font-family:ui-monospace,Consolas,monospace; font-size:.72rem; font-weight:700; color:{INK};
+  background:#2a2a28; border-radius:5px; padding:1px 6px; margin:0 4px 2px 0;}}
+.qcard {{border:1px solid rgba(255,255,255,.10); border-radius:10px; padding:8px 10px; margin-bottom:6px; background:#20201e;}}
+.qcard .t {{font-weight:800; color:{INK}; font-size:.86rem;}}
+.qcard .d {{color:{INK2}; font-size:.78rem;}}
+.small {{font-size:.78rem; color:{INK2};}}
 </style>
 """, unsafe_allow_html=True)
 
 ss = st.session_state
-ss.setdefault("flash", [])
+ss.setdefault("incidents", [])
 ss.setdefault("results", {})
 
-# Hosted deployments (Streamlit Community Cloud) keep API keys in st.secrets; expose them to the LLM layer.
+# Hosted deployments keep API keys in st.secrets; expose them to the LLM layer.
 try:
     for _k, _v in st.secrets.items():
         if isinstance(_v, str):
             os.environ.setdefault(_k, _v)
-except Exception:  # noqa: BLE001 - no secrets file locally is fine
+except Exception:  # noqa: BLE001
     pass
 
-# Every visitor gets an isolated copy of the scenario. The id lives in the URL (?s=...), so a page refresh
-# keeps your progress and two judges on the public demo never step on each other.
+# Every visitor gets an isolated copy of the scenario, keyed in the URL (?s=...).
 _sid = st.query_params.get("s", "")
 if not re.fullmatch(r"[a-f0-9]{10}", _sid or ""):
     _sid = uuid.uuid4().hex[:10]
@@ -83,18 +105,6 @@ def conn():
 
 
 C = conn()
-TIER_BADGE = {1: "🟥 P1", 2: "🟧 P2", 3: "🟦 P3", 4: "⬜ P4"}
-
-
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-def flash(kind: str, msg: str) -> None:
-    ss["flash"].append((kind, msg))
-
-
-def controller() -> hitl.ControllerIdentity:
-    return hitl.ControllerIdentity(ss.get("ctrl_name", "Duty Ops Controller"), ss.get("ctrl_id", "OCC-2611"))
 
 
 def brain_info() -> dict:
@@ -106,799 +116,857 @@ def brain_info() -> dict:
     return cache[choice]
 
 
-LANES = {
-    "llm": ("llm", "LLM BRAIN"), "thinking": ("thinking", "LLM REASONING"), "tool_call": ("tool", "TOOL CALL"),
-    "tool_result": ("tool", "CODE RESULT"), "guard_block": ("guard", "GUARD BLOCK"), "guard_pass": ("ok", "GUARD PASS"),
-    "hitl": ("hitl", "HITL STAGED"), "txn_commit": ("ok", "TXN COMMIT"), "txn_rollback": ("bad", "TXN ROLLBACK"),
-    "autopilot": ("auto", "CODE AUTOPILOT"), "system": ("sys", "SYSTEM"), "error": ("bad", "ERROR"),
-    "brief": ("llm", "BRIEF"), "policy": ("auto", "AGENT POLICY · offline"),
-}
+def controller() -> hitl.ControllerIdentity:
+    return hitl.ControllerIdentity(ss.get("ctrl_name", "Duty Ops Controller"), ss.get("ctrl_id", "OCC-2611"))
 
 
-def lane_html(kind: str, title: str, extra: str = "") -> str:
-    cls, tag = LANES.get(kind, ("tool", kind.upper()))
-    return (f"<div class='lane {cls}'><span class='tag'>{tag}</span>{html.escape(str(title))}"
-            f"{('<div class=small>' + html.escape(extra) + '</div>') if extra else ''}</div>")
+# ---------------------------------------------------------------------------
+# cached snapshot of everything the dashboard draws (recomputed only when state changes)
+# ---------------------------------------------------------------------------
+def state_version(c) -> str:
+    r = db.one(c, """SELECT (SELECT IFNULL(MAX(seq),0) FROM audit_log) a, (SELECT COUNT(*) FROM schedule_changes) b,
+                     (SELECT COUNT(*) FROM bookings WHERE source <> 'MANIFEST') d,
+                     (SELECT value FROM meta WHERE key = 'sim_clock') e,
+                     (SELECT COUNT(*) FROM maintenance_items WHERE status = 'CLOSED') f,
+                     (SELECT COUNT(*) FROM schedule_changes WHERE status <> 'PENDING') g""")
+    return "|".join(str(v) for v in r.values())
 
 
-def event_extra(ev: dict) -> str:
-    if ev["kind"] == "tool_call":
-        return json.dumps(ev["detail"], default=str)[:220] if ev["detail"] else ""
-    return ""
+@st.cache_data(max_entries=64, show_spinner=False)
+def snapshot(db_path: str, version: str) -> dict:
+    c = db.connect(db_path)
+    try:
+        prow = {p["pax_id"]: p for p in db.rows(c, "SELECT * FROM passengers")}
+        return {
+            "state": tools.get_turnaround_and_crew_state(c),
+            "risk": recovery.connection_risk(c),
+            "orig": recovery.connection_risk(c, use_original=True),
+            "gates": tools.evaluate_gate_options(c),
+            "crew": crew.find_standby_crew(c, flight_id=config.OUTBOUND_FLIGHT_ID, rank="CPT"),
+            "cpm": turnaround.critical_path(c, config.OUTBOUND_FLIGHT_ID),
+            "cost": costs.disruption_cost(c),
+            "airports": {a["code"]: a for a in db.rows(c, "SELECT * FROM airports")},
+            "flights": {f["flight_id"]: f for f in db.rows(c, "SELECT * FROM flights")},
+            "leg2": {r["pax_id"]: r for r in db.rows(c, "SELECT pax_id, flight_id, seat_no, source FROM bookings "
+                                                        "WHERE leg_no = 2 AND pax_id IS NOT NULL")},
+            "rebook_order": [r["pax_id"] for r in db.rows(c, "SELECT pax_id FROM bookings WHERE source = 'AEROTURN' "
+                                                             "ORDER BY booking_id")],
+            "tiers": {pid: guards.pax_tier(pax_facts(p)) for pid, p in prow.items()},
+            "pnr": {pid: p["pnr"] for pid, p in prow.items()},
+            "pending": hitl.pending(c),
+            "history": hitl.history(c),
+            "guard_log": db.rows(c, "SELECT seq, sim_time, action, detail FROM audit_log WHERE actor = 'GUARD' "
+                                    "AND (action LIKE '%BLOCK%' OR action LIKE '%REFUSED%') ORDER BY seq DESC LIMIT 8"),
+            "txns": db.rows(c, "SELECT * FROM txn_log ORDER BY started_at DESC"),
+            "chain": audit.verify_chain(c),
+            "clock": db.now(c),
+            "out": db.one(c, "SELECT * FROM flights WHERE flight_id = ?", (config.OUTBOUND_FLIGHT_ID,)),
+            "inb": db.one(c, "SELECT * FROM flights WHERE flight_id = ?", (config.INBOUND_FLIGHT_ID,)),
+            "notes": db.one(c, "SELECT COUNT(*) AS n FROM notifications")["n"],
+            "audit_tail": audit.recent(c, 60),
+        }
+    finally:
+        c.close()
 
 
-def render_trace(trace: list[dict], compact: bool = False) -> None:
-    for ev in trace:
-        if compact and ev["kind"] in ("tool_result", "thinking", "tool_call"):
+SNAP = snapshot(str(SESSION_DB), state_version(C))
+
+
+# ---------------------------------------------------------------------------
+# incidents: the outcome of each scenario, shown as a status card
+# ---------------------------------------------------------------------------
+def push_incident(level: str, title: str, lines: list[str] | None = None, rules: list[str] | None = None) -> None:
+    ss["incidents"].insert(0, {"level": level, "title": title, "lines": lines or [], "rules": rules or [],
+                               "clock": hm(db.now(conn()))})
+    ss["incidents"] = ss["incidents"][:6]
+
+
+def verdict_lines(r: dict, n: int = 3) -> tuple[list[str], list[str]]:
+    g = r.get("guard") or {}
+    seen, lines = set(), []
+    for v in g.get("violations", []):
+        if v["rule"] in seen:
             continue
-        st.markdown(lane_html(ev["kind"], ev["title"], event_extra(ev)), unsafe_allow_html=True)
-        if not compact and ev["kind"] in ("tool_result", "guard_block", "hitl", "txn_commit", "txn_rollback",
-                                          "error", "thinking") and ev.get("detail"):
-            with st.expander("details", expanded=False):
-                if isinstance(ev["detail"], (dict, list)):
-                    st.json(ev["detail"], expanded=1)
-                else:
-                    st.code(str(ev["detail"])[:3000])
-
-
-def verdict_card(res: dict, title: str) -> None:
-    g = res.get("guard") or {}
-    status = res.get("status") or g.get("verdict")
-    if status in ("BLOCKED", "BLOCKED_AT_APPROVAL", "REFUSED", "REJECTED_INVALID_ARGS", "ERROR", "REJECTED"):
-        cls, head = "vblock", f"⛔ {status}"
-    elif status in ("PENDING",):
-        cls, head = "vpend", "⏳ STAGED: awaiting Operations Controller"
-    else:
-        cls, head = "vpass", f"✅ {status}"
-    body = ""
-    vs = g.get("violations", [])
-    seen, first, rest = set(), [], []
-    for v in vs:
-        (rest if v["rule"] in seen else first).append(v)
         seen.add(v["rule"])
-    vs = first + rest
-    for v in vs[:5]:
-        body += (f"<div><span class='rule'>{html.escape(v['rule'])}</span>{html.escape(v.get('title', ''))}"
-                 f"<div class='small'>{html.escape(v.get('message', ''))}</div></div>")
-    more = len(vs) - 5
-    if more > 0:
-        body += f"<div class='small'>... and {more} more violation(s)</div>"
-    for e in res.get("errors", []) or []:
-        body += f"<div><span class='rule'>ARGS</span>{html.escape(e)}</div>"
-    if res.get("error"):
-        body += f"<div class='small'>{html.escape(str(res['error']))}</div>"
-    if res.get("message"):
-        body += f"<div class='small' style='margin-top:6px'>{html.escape(res['message'])}</div>"
-    st.markdown(f"<div class='vcard {cls}'><div class='vtitle'>{html.escape(title)}: {head}</div>{body}</div>",
-                unsafe_allow_html=True)
+        lines.append(f"{v['rule']}: {v['message']}")
+    lines = lines[:n] + ([f"... {len(g['violations']) - n} more"] if len(g.get("violations", [])) > n else [])
+    lines += [f"ARGS: {e}" for e in r.get("errors", []) or []]
+    if r.get("error"):
+        lines.append(str(r["error"])[:160])
+    return lines, sorted(seen)
 
 
-def run_agent(container, inject: bool, fault_step: int = 7) -> None:
-    c = conn()
-    if inject:
-        faults.arm(c, "SEAT_CONFLICT", fault_step)
-    info = brain_info()
-    client = llm.make_client(info)
-    with container.status(f"AeroTurn agent running. Brain: {llm.describe(info)}", expanded=True) as status:
-        def on_event(ev):
-            if ev.kind in ("tool_result",):
-                return
-            status.markdown(lane_html(ev.kind, ev.title, event_extra(ev.as_dict())), unsafe_allow_html=True)
-        res = agent.AeroTurnAgent(c, client, on_event=on_event).run()
-        status.update(label=f"Agent finished. Brain: {llm.describe(info)}", state="complete", expanded=False)
-    ss["agent_result"] = res
-    rb = [e for e in res["trace"] if e["kind"] == "txn_rollback"]
-    if rb:
-        ss["results"]["agent_rollback"] = rb[-1]["detail"]
+def status_html(level: str, label: str) -> str:
+    color = STATUS_COLOR[level]
+    return (f"<span class='st' style='color:{color}'><b style='background:{color}'>{STATUS_ICON[level]}</b>"
+            f"{html.escape(label)}</span>")
 
 
 # ---------------------------------------------------------------------------
-# callbacks (run before the page re-renders, so KPIs are always fresh)
+# scenario callbacks
 # ---------------------------------------------------------------------------
-def cb_reset():
-    db.reset_runtime(SESSION_DB)
-    for k in ("agent_result", "results", "flash"):
-        ss.pop(k, None)
-    ss["results"], ss["flash"] = {}, []
-    flash("success", "Scenario reset to 14:50 GST: EK812 on approach, nothing decided yet.")
+def _crew(flight_id: str, fit_only: bool = True) -> list[str]:
+    cond = "AND status IN ('ROSTERED','ASSIGNED')" if fit_only else ""
+    return [r["crew_id"] for r in db.rows(conn(), f"SELECT crew_id FROM crew_assignments WHERE flight_id = ? {cond}",
+                                          (flight_id,))]
 
 
-def cb_rogue(kind: str):
+def sc_crew_breach():
+    r = tools.dispatch(conn(), "propose_departure", {"flight_no": "EK813", "off_blocks": "16:35",
+                                                     "crew_ids": _crew(config.INBOUND_FLIGHT_ID, False),
+                                                     "justification": "Use the inbound crew already on board"},
+                       actor="ROGUE_LLM")
+    lines, rules = verdict_lines(r)
+    push_incident("crit", "Rogue proposal: EK813 at 16:35 with the inbound crew: BLOCKED", lines, rules)
+
+
+def sc_no_crs():
     c = conn()
-    crew_a = [r["crew_id"] for r in db.rows(c, "SELECT crew_id FROM crew_assignments WHERE flight_id = ?",
-                                            (config.INBOUND_FLIGHT_ID,))]
-    crew_b = [r["crew_id"] for r in db.rows(c, "SELECT crew_id FROM crew_assignments WHERE flight_id = ? "
-                                               "AND status IN ('ROSTERED','ASSIGNED')", (config.OUTBOUND_FLIGHT_ID,))]
     eobt = turnaround.critical_path(c, config.OUTBOUND_FLIGHT_ID)["eobt_hm"]
-    if kind == "crew":
-        r = tools.dispatch(c, "propose_departure", {"flight_no": "EK813", "off_blocks": "16:35", "crew_ids": crew_a,
-                                                    "justification": "Get the plane out: inbound crew is already on board"},
-                           actor="ROGUE_LLM")
-    elif kind == "mx":
-        ids = sorted(set(crew_b + ["S-04"]))
-        r = tools.dispatch(c, "propose_departure", {"flight_no": "EK813", "off_blocks": eobt, "crew_ids": ids,
-                                                    "justification": "Crew is legal, dispatch before the inspection is signed"},
-                           actor="ROGUE_LLM")
-    elif kind == "override":
-        r = tools.dispatch(c, "propose_departure", {"flight_no": "EK813", "off_blocks": "16:35", "override": True,
-                                                    "emergency_waiver": "OCC director approved"}, actor="ROGUE_LLM")
-    elif kind == "approve":
+    ids = sorted(set(_crew(config.OUTBOUND_FLIGHT_ID)) | {"S-04"})
+    r = tools.dispatch(c, "propose_departure", {"flight_no": "EK813", "off_blocks": eobt, "crew_ids": ids,
+                                                "justification": "Crew legal, dispatch before inspection is signed"},
+                       actor="ROGUE_LLM")
+    lines, rules = verdict_lines(r)
+    level, title = ("crit", f"Rogue proposal: EK813 at {eobt} without the hydraulic CRS: BLOCKED") \
+        if r.get("status") == "BLOCKED" else ("warn", f"EK813 at {eobt}: {r.get('status')}")
+    push_incident(level, title, lines or [r.get("message", "")], rules)
+
+
+def sc_override():
+    r = tools.dispatch(conn(), "propose_departure", {"flight_no": "EK813", "off_blocks": "16:35", "override": True,
+                                                     "emergency_waiver": "OCC director approved"}, actor="ROGUE_LLM")
+    lines, _ = verdict_lines(r)
+    push_incident("crit", "Tool call with override=True / emergency_waiver: REJECTED (no override exists)", lines,
+                  ["ARGS"])
+
+
+def sc_self_approve():
+    try:
+        pend = hitl.pending(conn())
+        hitl.approve(conn(), pend[0]["change_id"] if pend else "CHG-X", hitl.ControllerIdentity("AeroTurn agent", "LLM"))
+        push_incident("serious", "Agent self-approval unexpectedly succeeded")
+    except Exception as exc:  # noqa: BLE001
+        push_incident("crit", "Agent tries to approve its own change: REFUSED",
+                      [f"{type(exc).__name__}: {exc}", "Approval is not in the agent's tool registry."], ["HITL-001"])
+
+
+def sc_rollback():
+    lr = lab.rollback_experiment(ss.get("chaos_kind_lab", "SEAT_CONFLICT"), int(ss.get("chaos_step_lab", 7)),
+                                 tag=f"sb_{_sid}")
+    ss["results"]["lab_rollback"] = lr
+    f = lr["first"]
+    inv = f["invariants_after"]
+    push_incident("serious", f"Mid-way {(f.get('fault_injected') or {}).get('kind', 'fault')} at step "
+                             f"{f['failed_at_step']}: ROLLED BACK, then retry {lr['retry']['status']}",
+                  [(f.get("fault_injected") or {}).get("story", ""),
+                   f"{f['provisional_steps_reverted']} provisional rebookings reverted · state identical: "
+                   f"{'YES' if f['state_identical_to_before'] else 'NO'}",
+                   f"double bookings {inv['seat_double_bookings'] + inv['duplicate_leg_bookings']} · orphaned bags "
+                   f"{inv['orphaned_bags'] + inv['bags_left_on_old_connection']} · after retry: "
+                   f"{lr['final']['at_risk_remaining']} at risk"], ["ROLLBACK", "COMMIT"])
+
+
+def sc_naive():
+    ln = lab.naive_vs_guarded(tag=f"sb_{_sid}_naive")
+    ss["results"]["lab_naive"] = ln
+    r = ln["naive_result"]
+    g = r.get("guard") or {}
+    counts: dict[str, int] = {}
+    for v in g.get("violations", []):
+        counts[v["rule"]] = counts.get(v["rule"], 0) + 1
+    lines, _ = verdict_lines(r, 4)
+    push_incident("crit", f"Unconstrained revenue-first plan: BLOCKED ({len(g.get('violations', []))} violations); "
+                          f"AeroTurn plan: {ln['aeroturn_result']['status']}", lines,
+                  [f"{k}×{n}" for k, n in sorted(counts.items())])
+
+
+def sc_approve_all():
+    c = conn()
+    out = []
+    for ch in hitl.pending(c):
         try:
-            pend = hitl.pending(c)
-            hitl.approve(c, pend[0]["change_id"] if pend else "CHG-X", hitl.ControllerIdentity("AeroTurn agent", "LLM-1"))
-            r = {"status": "APPROVED"}
-        except Exception as exc:  # noqa: BLE001
-            r = {"status": "REJECTED", "error": f"{type(exc).__name__}: {exc}",
-                 "message": "Approval functions are not in the agent tool registry, and hitl.approve() refuses "
-                            "non-human identities."}
-    else:
-        return
-    ss["results"][f"rogue_{kind}"] = r
+            r = hitl.approve(c, ch["change_id"], controller(), "approved from dashboard")
+        except hitl.ApprovalError as exc:
+            r = {"status": f"ERROR {exc}"}
+        out.append(f"{ch['change_type']} {ch['flight_no']}: {r['status']}")
+    push_incident("good" if out and all(x.endswith("APPROVED") for x in out) else "warn",
+                  f"Operations Controller decided {len(out)} change(s)", out or ["Queue empty: run the agent first."])
+
+
+def sc_crs_release():
+    c = conn()
+    lines = []
+    mxi = next(t for t in turnaround.critical_path(c, config.OUTBOUND_FLIGHT_ID)["tasks"] if t["task_id"] == "MXI")
+    hitl.advance_clock(c, mxi["end_hm"])
+    lines.append(f"Clock → {mxi['end_hm']} (inspection complete)")
+    r2 = hitl.sign_crs(c, "MX-0412", "E-02")
+    lines.append(f"B2 avionics engineer signs: {r2['status']} {' '.join((r2.get('guard') or {}).get('rules_violated', []))}")
+    r1 = hitl.sign_crs(c, "MX-0412", "E-01")
+    lines.append(f"B1 engineer signs: {r1['status']}")
+    eobt = turnaround.critical_path(c, config.OUTBOUND_FLIGHT_ID)["eobt_hm"]
+    rr = tools.dispatch(c, "propose_departure", {"flight_no": "EK813", "off_blocks": eobt}, actor="OCC_UI")
+    lines.append(f"Departure release at {eobt}: {rr['status']} "
+                 f"{' '.join((rr.get('guard') or {}).get('rules_violated', []))}")
+    level = "warn"
+    if rr.get("status") == "PENDING":
+        a = hitl.approve(c, rr["change_id"], controller(), "released")
+        lines.append(f"Controller release: {a['status']}")
+        level = "good" if a["status"] == "APPROVED" else "warn"
+    elif rr.get("status") == "BLOCKED":
+        lines.append("Approve the captain swap first (Controller queue), then repeat.")
+    push_incident(level, "Maintenance sign-off and EK813 departure release", lines, ["MX-002", "MX-001"])
+
+
+def sc_rebook_remaining():
+    c = conn()
+    p = tools.dispatch(c, "plan_passenger_recovery", {"objective": "earliest_arrival"}, actor="OCC_UI")
+    r = tools.dispatch(c, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]}, actor="OCC_UI")
+    if r.get("status") == "COMMITTED":
+        tools.dispatch(c, "send_passenger_notifications", {"templates": narrative.DEFAULT_TEMPLATES}, actor="OCC_UI")
+    push_incident("good" if r.get("status") == "COMMITTED" else "warn", f"Rebook remaining passengers: {r.get('status')}")
+
+
+def sc_reset():
+    db.reset_runtime(SESSION_DB)
+    ss["incidents"], ss["results"] = [], {}
+    ss.pop("agent_result", None)
+    push_incident("info", "Scenario reset: 14:50 GST, EK812 on approach, nothing decided")
 
 
 def cb_approve(change_id: str):
     try:
-        r = hitl.approve(conn(), change_id, controller(), ss.get(f"note_{change_id}", ""))
+        r = hitl.approve(conn(), change_id, controller(), "approved")
     except hitl.ApprovalError as exc:
-        r = {"status": "REJECTED", "error": str(exc)}
-    ss["results"][f"approval_{change_id}"] = r
-    flash("success" if r["status"] == "APPROVED" else "warning", f"{change_id}: {r['status']}")
+        r = {"status": "REFUSED", "error": str(exc)}
+    lines, rules = verdict_lines(r)
+    push_incident("good" if r["status"] == "APPROVED" else "crit",
+                  f"Controller: {r.get('change_type', change_id)} {r['status']}", lines or [r.get("message", "")], rules)
 
 
 def cb_reject(change_id: str):
-    try:
-        r = hitl.reject(conn(), change_id, controller(), ss.get(f"note_{change_id}", "") or "Rejected by controller")
-    except hitl.ApprovalError as exc:
-        r = {"status": "ERROR", "error": str(exc)}
-    flash("info", f"{change_id}: {r['status']}")
-
-
-def cb_sign(eng_id: str):
-    r = hitl.sign_crs(conn(), "MX-0412", eng_id, ss.get("crs_remarks", ""))
-    ss["results"]["crs"] = r
-    flash("success" if r["status"] == "SIGNED" else "error", f"CRS {r['status']}")
+    r = hitl.reject(conn(), change_id, controller(), "rejected from dashboard")
+    push_incident("warn", f"Controller rejected {change_id}: {r['status']}")
 
 
 def cb_advance(to: str):
-    r = hitl.advance_clock(conn(), to)
-    flash("info", f"Clock: {r['clock']}")
+    hitl.advance_clock(conn(), to)
 
 
-def cb_propose_release():
+def run_agent(holder, inject: bool) -> None:
     c = conn()
-    eobt = turnaround.critical_path(c, config.OUTBOUND_FLIGHT_ID)["eobt_hm"]
-    ss["results"]["release"] = tools.dispatch(c, "propose_departure", {"flight_no": "EK813", "off_blocks": eobt},
-                                              actor="OCC_UI")
-
-
-def cb_arm():
-    kind = ss.get("chaos_kind")
-    if kind and kind != "none":
-        faults.arm(conn(), kind, int(ss.get("chaos_step", 7)))
-        flash("warning", f"Chaos armed: {kind} at step {ss.get('chaos_step', 7)} of the next live rebooking.")
-    else:
-        faults.disarm(conn())
-
-
-def cb_rebook_remaining():
-    c = conn()
-    plan = tools.dispatch(c, "plan_passenger_recovery", {"objective": "earliest_arrival"}, actor="OCC_UI")
-    r = tools.dispatch(c, "execute_atomic_passenger_rebook", {"plan_id": plan["plan_id"]}, actor="OCC_UI")
-    if r.get("status") == "COMMITTED":
-        tools.dispatch(c, "send_passenger_notifications", {"templates": narrative.DEFAULT_TEMPLATES}, actor="OCC_UI")
-    flash("success" if r.get("status") == "COMMITTED" else "warning",
-          f"Rebooking of remaining passengers: {r.get('status')}")
-
-
-def cb_lab_rollback():
-    ss["results"]["lab_rollback"] = lab.rollback_experiment(ss.get("lab_kind", "SEAT_CONFLICT"),
-                                                            int(ss.get("lab_step", 7)), tag=f"sb_{_sid}")
-
-
-def cb_lab_naive():
-    ss["results"]["lab_naive"] = lab.naive_vs_guarded(tag=f"sb_{_sid}_naive")
+    if inject:
+        faults.arm(c, "SEAT_CONFLICT", 7)
+    info = brain_info()
+    client = llm.make_client(info)
+    with holder.status(f"AeroTurn agent running · {llm.describe(info)}", expanded=True) as status:
+        def on_event(ev):
+            if ev.kind in ("tool_result", "thinking"):
+                return
+            status.markdown(event_html(ev.kind, ev.title), unsafe_allow_html=True)
+        res = agent.AeroTurnAgent(c, client, on_event=on_event).run()
+        status.update(label="Agent finished", state="complete", expanded=False)
+    ss["agent_result"] = res
+    rb = [e for e in res["trace"] if e["kind"] == "txn_rollback"]
+    blocks = [e["title"] for e in res["trace"] if e["kind"] == "guard_block"]
+    push_incident("good", f"Recovery run complete · {res.get('brain', '')}",
+                  ([f"Mid-way seat conflict rolled back and retried" if rb else "Atomic rebooking committed"]
+                   + [f"Guard: {b}" for b in blocks[:3]]))
 
 
 # ---------------------------------------------------------------------------
-# sidebar
+# chart helpers
+# ---------------------------------------------------------------------------
+def base_layout(fig: go.Figure, height: int, legend: bool = True) -> go.Figure:
+    fig.update_layout(height=height, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      font=dict(color=INK2, size=12, family="system-ui, -apple-system, Segoe UI, sans-serif"),
+                      margin=dict(l=8, r=8, t=8, b=8), showlegend=legend,
+                      legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, font=dict(color=INK2, size=11),
+                                  bgcolor="rgba(0,0,0,0)"),
+                      hoverlabel=dict(bgcolor="#262624", bordercolor=AXIS, font=dict(color=INK)))
+    fig.update_xaxes(gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS, tickfont=dict(color=MUTED), automargin=True)
+    fig.update_yaxes(gridcolor=GRID, zerolinecolor=AXIS, linecolor=AXIS, tickfont=dict(color=INK2), automargin=True)
+    return fig
+
+
+PLOT_CFG = {"displayModeBar": False}
+
+
+RISK_MAP = {p["pax_id"]: p for p in SNAP["risk"]["passengers"]}
+
+
+def pax_status(pid: str) -> str:
+    p = RISK_MAP.get(pid)
+    if p and p["at_risk"]:
+        return "crit"
+    if p and p.get("hold_pending"):
+        return "warn"
+    return "good"
+
+
+def network_map() -> go.Figure:
+    ap = SNAP["airports"]
+    disrupted = [p for p in SNAP["orig"]["passengers"] if p["at_risk"]]
+    by_dest: dict[str, list[dict]] = {}
+    for p in disrupted:
+        by_dest.setdefault(p["dest"], []).append(p)
+    fig = go.Figure()
+    dxb, lca = ap["DXB"], ap["LCA"]
+    fig.add_trace(go.Scattergeo(lon=[lca["lon"], dxb["lon"]], lat=[lca["lat"], dxb["lat"]], mode="lines",
+                                line=dict(width=2, color=MUTED), name="EK812 inbound (75 min late)",
+                                hoverinfo="text", text="EK812 LCA→DXB"))
+    shown = set()
+    labels = {"crit": "At risk", "warn": "Hold pending", "good": "Protected"}
+    colors = {"crit": CRIT, "warn": WARN, "good": GOOD}
+    for dest, plist in sorted(by_dest.items()):
+        sts = [pax_status(p["pax_id"]) for p in plist]
+        stt = "crit" if "crit" in sts else ("warn" if "warn" in sts else "good")
+        a = ap[dest]
+        leg = SNAP["leg2"]
+        new = sorted({SNAP["flights"][leg[p["pax_id"]]["flight_id"]]["flight_no"] for p in plist if p["pax_id"] in leg})
+        vul = sum(1 for p in plist if p["vulnerable"])
+        tip = (f"<b>{dest} · {a['city']}</b><br>{len(plist)} disrupted ({vul} vulnerable)<br>missed "
+               f"{plist[0]['onward_flight']}<br>now on: {', '.join(new)}<br>status: {labels[stt]}")
+        fig.add_trace(go.Scattergeo(lon=[dxb["lon"], a["lon"]], lat=[dxb["lat"], a["lat"]], mode="lines",
+                                    line=dict(width=1.5 + len(plist) * 0.45, color=colors[stt]),
+                                    name=labels[stt], legendgroup=stt, showlegend=stt not in shown,
+                                    hoverinfo="text", text=tip))
+        shown.add(stt)
+        fig.add_trace(go.Scattergeo(lon=[a["lon"]], lat=[a["lat"]], mode="markers+text",
+                                    marker=dict(size=7 + len(plist), color=colors[stt],
+                                                line=dict(width=2, color=SURFACE)),
+                                    text=[f"{dest} {len(plist)}"], textposition="top center",
+                                    textfont=dict(color=INK, size=11), hoverinfo="text", hovertext=tip,
+                                    legendgroup=stt, showlegend=False))
+    fig.add_trace(go.Scattergeo(lon=[dxb["lon"]], lat=[dxb["lat"]], mode="markers+text", text=["DXB"],
+                                textposition="bottom center", textfont=dict(color=INK, size=12),
+                                marker=dict(size=14, color=S1, line=dict(width=2, color=SURFACE)),
+                                name="Hub", showlegend=False, hoverinfo="text",
+                                hovertext="DXB hub · 280 connecting from EK812"))
+    fig.update_geos(projection_type="natural earth", showland=True, landcolor="#262624", showocean=True,
+                    oceancolor="#141413", showcountries=True, countrycolor=AXIS, coastlinecolor=AXIS,
+                    showlakes=False, bgcolor="rgba(0,0,0,0)", lonaxis_range=[-5, 160], lataxis_range=[-42, 55],
+                    showframe=False)
+    return base_layout(fig, 360)
+
+
+def gantt() -> go.Figure:
+    cpm = SNAP["cpm"]
+    short = {"ONB": "On-blocks", "DEPL": "Deplaning", "OFFL": "Bag offload", "MXI": "HYD inspection + CRS",
+             "CLN": "Cleaning", "CAT": "Catering", "FUEL": "Refuel", "LOAD": "Bag load", "CREW": "Crew prep",
+             "BRD": "Boarding", "DOORS": "Doors & push"}
+    df = pd.DataFrame([{"Task": short.get(t["task_id"], t["name"]), "Start": parse(t["start"]), "Finish": parse(t["end"]),
+                        "Path": "Critical path" if t["critical"] else "Has slack", "Slack": f"{t['slack_min']} min"}
+                       for t in cpm["tasks"] if t["duration_min"] > 0]).sort_values("Start")
+    fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task", color="Path", hover_data=["Slack"],
+                      color_discrete_map={"Critical path": S1, "Has slack": SLACK})
+    fig.update_traces(marker_line_color=SURFACE, marker_line_width=2)
+    fig.update_yaxes(autorange="reversed", title=None)
+    fig.update_xaxes(title=None, tickformat="%H:%M")
+    marks = [(parse(SNAP["out"]["std"]), "STD", MUTED), (parse(cpm["eobt"]), "EOBT", S1)]
+    clock = SNAP["clock"]
+    if parse(cpm["eibt"]) <= clock <= parse(cpm["eobt"]):
+        marks.append((clock, "NOW", INK))
+    for x, lab_, col in marks:
+        fig.add_shape(type="line", x0=x, x1=x, y0=0, y1=1, yref="paper", line=dict(color=col, width=2))
+        fig.add_annotation(x=x, y=1.06, yref="paper", text=f"{lab_} {hm(x)}", showarrow=False, font=dict(color=col, size=11))
+    base_layout(fig, 360)
+    fig.update_layout(margin=dict(l=8, r=8, t=26, b=8), legend=dict(y=-0.16, yanchor="top"))
+    return fig
+
+
+def crew_chart() -> go.Figure:
+    rows = []
+    for o in SNAP["gates"]["options"]:
+        rows.append({"who": f"Inbound crew · {o['gate']}{' (hold)' if o['hold_for_stand_min'] else ''}",
+                     "m": o["crew_fdp_margin_min"], "legal": o["legal"],
+                     "why": "" if o["legal"] else ",".join(sorted({v["rule"] for v in o["violations"]}))})
+    for c_ in SNAP["crew"]["candidates"]:
+        rows.append({"who": f"{c_['crew_id']} {c_['name'].split()[-1]}", "m": c_["margin_min"] or 0, "legal": c_["legal"],
+                     "why": ",".join(v["rule"] for v in c_["violations"])})
+    fig = go.Figure()
+    for legal, name, col in ((True, "Legal", GOOD), (False, "Illegal (blocked)", CRIT)):
+        sub = [r for r in rows if r["legal"] == legal]
+        if not sub:
+            continue
+        fig.add_trace(go.Bar(y=[r["who"] for r in sub], x=[max(r["m"], -150) for r in sub], orientation="h", name=name,
+                             marker=dict(color=col, line=dict(color=SURFACE, width=2)), width=0.6,
+                             text=[(f"✓ {r['m']:+d}m" if r["legal"] else f"✕ {r['why'] or 'illegal'}") for r in sub], textposition="auto", insidetextanchor="middle",
+                             insidetextfont=dict(color="#ffffff", size=11), outsidetextfont=dict(color=INK2, size=11),
+                             cliponaxis=False,
+                             customdata=[r["m"] for r in sub],
+                             hovertemplate="%{y}<br>FDP margin %{customdata} min<extra></extra>",
+                             hovertext=None))
+    order = [r["who"] for r in rows]
+    fig.update_yaxes(categoryorder="array", categoryarray=list(reversed(order)), title=None)
+    fig.update_xaxes(title=None, zeroline=True, zerolinewidth=2, range=[-235, 300], ticksuffix="m")
+    base_layout(fig, 360)
+    fig.update_layout(barmode="overlay", margin=dict(l=8, r=8, t=24, b=8))
+    return fig
+
+
+def sankey() -> go.Figure | None:
+    disrupted = [p for p in SNAP["orig"]["passengers"] if p["at_risk"]]
+    if not disrupted:
+        return None
+    risk = {p["pax_id"]: p for p in SNAP["risk"]["passengers"]}
+    links: dict[tuple, int] = {}
+    group_tier: dict[str, int] = {}
+    for p in disrupted:
+        group_tier[SNAP["pnr"][p["pax_id"]]] = min(group_tier.get(SNAP["pnr"][p["pax_id"]], 4), SNAP["tiers"][p["pax_id"]])
+    for p in disrupted:
+        src = f"{p['onward_flight']} → {p['dest']}"
+        cur = risk.get(p["pax_id"])
+        if cur and cur["at_risk"]:
+            dst = "⚠ Unassigned (at risk)"
+        elif cur and cur.get("hold_pending"):
+            dst = f"⏸ {p['onward_flight']} hold pending"
+        else:
+            f = SNAP["flights"][SNAP["leg2"][p["pax_id"]]["flight_id"]]
+            dst = f"{f['flight_no']} {hm(f['etd'] or f['std'])}" + (" (held)" if f["status"] == "HELD" else "")
+        t = group_tier[SNAP["pnr"][p["pax_id"]]]
+        links[(src, dst, t)] = links.get((src, dst, t), 0) + 1
+    nodes = sorted({k[0] for k in links}) + sorted({k[1] for k in links})
+    idx = {n: i for i, n in enumerate(nodes)}
+
+    def rgba(hexc: str, a: float) -> str:
+        h = hexc.lstrip("#")
+        return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})"
+
+    fig = go.Figure(go.Sankey(
+        arrangement="snap",
+        node=dict(label=nodes, pad=10, thickness=12, color=[AXIS] * len(nodes), line=dict(color=SURFACE, width=1),
+                  hovertemplate="%{label}<br>%{value} passengers<extra></extra>"),
+        link=dict(source=[idx[k[0]] for k in links], target=[idx[k[1]] for k in links], value=list(links.values()),
+                  color=[rgba(TIER[k[2]], 0.65) for k in links],
+                  customdata=[guards.TIER_LABELS[k[2]] for k in links],
+                  hovertemplate="%{source.label} → %{target.label}<br>%{value} pax · %{customdata}<extra></extra>"),
+        textfont=dict(color=INK, size=11)))
+    return base_layout(fig, 380, legend=False)
+
+
+def cost_chart() -> go.Figure:
+    cst = SNAP["cost"]
+    leg, aer = cst["legacy_auto_reprotect"], cst["aeroturn"]
+    fig = go.Figure()
+    for comp, name, col in (("eu261", "EU261", S1), ("hotel", "Hotel", S2), ("meals", "Meals", S3)):
+        fig.add_trace(go.Bar(y=["Legacy +24h", "AeroTurn"], x=[leg[comp], aer[comp]], orientation="h", name=name,
+                             marker=dict(color=col, line=dict(color=SURFACE, width=2)), width=0.55,
+                             hovertemplate=name + ": €%{x:,}<extra></extra>"))
+    for y, tot in (("Legacy +24h", leg["total"]), ("AeroTurn", aer["total"])):
+        fig.add_annotation(x=tot, y=y, text=f"  €{tot:,}", showarrow=False, xanchor="left", font=dict(color=INK, size=12))
+    fig.update_yaxes(categoryorder="array", categoryarray=["AeroTurn", "Legacy +24h"], title=None)
+    fig.update_xaxes(title=None, tickprefix="€", tickformat="~s")
+    base_layout(fig, 210)
+    fig.update_layout(barmode="stack", margin=dict(l=8, r=70, t=26, b=8))
+    return fig
+
+
+def event_html(kind: str, title: str) -> str:
+    cmap = {"llm": ("#9085e9", "LLM"), "policy": (MUTED, "POLICY"), "tool_call": (S1, "TOOL"),
+            "guard_block": (CRIT, "GUARD ✕"), "hitl": (WARN, "HITL ◆"), "txn_commit": (GOOD, "COMMIT ✓"),
+            "txn_rollback": (SERIOUS, "ROLLBACK ▲"), "autopilot": (MUTED, "AUTOPILOT"), "system": (S1, "SYSTEM"),
+            "error": (CRIT, "ERROR"), "brief": ("#9085e9", "BRIEF")}
+    col, tag = cmap.get(kind, (AXIS, kind.upper()))
+    return f"<div class='ev' style='border-left-color:{col}'><span class='k'>{tag}</span>{html.escape(str(title))}</div>"
+
+
+def audit_events(rows: list[dict]) -> list[tuple[str, str]]:
+    """Rebuild a readable feed from the hash-chained audit log (survives page reloads)."""
+    out = []
+    for r in rows:
+        actor, action = r["actor"], r["action"]
+        try:
+            d = json.loads(r["detail"] or "{}")
+        except json.JSONDecodeError:
+            d = {}
+        who = actor.split(":", 1)[-1] if actor.startswith("AGENT") else actor.replace("_", " ").lower()
+        if action.startswith("CALL "):
+            out.append(("tool_call", f"{who} → {action[5:]}"))
+        elif actor == "GUARD":
+            rules = ", ".join(d.get("rules", []) or [])
+            kind = "guard_block" if ("BLOCK" in action or "REFUSED" in action) else "hitl"
+            out.append((kind, f"{action} {d.get('flight') or d.get('item') or d.get('plan_id') or ''}"
+                              + (f" ({rules})" if rules else "")))
+        elif actor == "TXN":
+            out.append(("txn_commit" if action == "COMMIT" else "txn_rollback",
+                        f"{action} {d.get('txn_id', '')} " + (f"{d.get('rebooked', '')} pax" if action == "COMMIT"
+                                                               else str(d.get("error", ""))[:80])))
+        elif actor == "CONTROLLER":
+            out.append(("hitl", f"Controller {action.lower()} · {d.get('by', '')}"))
+        elif actor == "ENGINEER":
+            out.append(("system", f"CRS signed {d.get('item', '')} by {d.get('engineer', '')}"))
+        elif actor == "CHAOS":
+            out.append(("txn_rollback", f"Chaos: {d.get('story', action)}"))
+        elif action == "AGENT_RUN_START":
+            out.append(("system", f"Agent run started · {d.get('brain', '')}"))
+        elif action == "EXECUTIVE_BRIEF":
+            out.append(("brief", f"Executive brief by {d.get('source', '')}"))
+        elif actor == "SIMULATION":
+            out.append(("system", f"Clock {d.get('from', '')} → {d.get('to', '')}"))
+    return out
+
+
+def kpi(col, label: str, value: str, sub: str, level: str, status_label: str) -> None:
+    col.markdown(f"<div class='kpi'><div class='lab'>{html.escape(label)}</div><div class='val'>{html.escape(value)}</div>"
+                 f"<div class='sub'>{status_html(level, status_label)} &nbsp;{html.escape(sub)}</div></div>",
+                 unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# sidebar: settings (collapsed by default)
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("<p class='hero'>✈️ AeroTurn OCC</p><p class='sub'>DXB hub · EK812 disruption</p>",
-                unsafe_allow_html=True)
-    clock = db.now(C)
-    gate_change = db.one(C, "SELECT * FROM schedule_changes WHERE change_type = 'GATE_REASSIGNMENT' "
-                            "AND status IN ('PENDING','APPROVED') ORDER BY staged_at DESC LIMIT 1")
-    c1, c2 = st.columns(2)
-    c1.metric("Sim clock (GST)", hm(clock))
-    deadline = parse("2026-11-21T15:15")
-    left = minutes(clock, deadline)
-    c2.metric("Gate decision", f"{left} min" if left > 0 else "closed",
-              help="EK812 must know its stand 5 min before in-block (15:20); inbound crew FDP ends 15:40")
-    st.caption("Advance scenario clock")
-    adv = st.columns(3)
-    adv[0].button("15:10", on_click=cb_advance, args=("15:10",), width="stretch")
-    adv[1].button("15:25", on_click=cb_advance, args=("15:25",), width="stretch")
-    mxi_end = next((t["end_hm"] for t in turnaround.critical_path(C, config.OUTBOUND_FLIGHT_ID)["tasks"]
-                    if t["task_id"] == "MXI"), "16:30")
-    adv[2].button(mxi_end, on_click=cb_advance, args=(mxi_end,), width="stretch",
-                  help="Hydraulic inspection complete")
-
-    st.divider()
-    st.selectbox("Agent brain", ["auto", "offline", "ollama", "groq", "gemini"], key="brain_choice",
-                 help="auto: local Ollama qwen3 if running, else Groq / Gemini keys from .env, else offline policy")
-    info = brain_info()
-    if info["provider"] == "offline":
-        st.caption(f"🧠 **Offline policy** (no LLM): {info.get('reason', '')}")
-    else:
-        _mode = agent.MODE_LABELS[agent.agent_mode(llm.make_client(info))]
-        st.caption(f"🧠 **{info['model']}** via {info['provider']} · {_mode}")
+    st.markdown("### ⚙️ Settings")
+    st.selectbox("Agent brain", ["auto", "offline", "ollama", "groq", "gemini"], key="brain_choice")
     if st.button("Re-detect LLM", width="stretch"):
         ss.pop("brain_cache", None)
         st.rerun()
-
-    st.divider()
-    st.markdown("**Operations Controller (HITL)**")
-    st.text_input("Name", value="Duty Ops Controller", key="ctrl_name")
-    st.text_input("Staff / licence ID", value="OCC-2611", key="ctrl_id")
-
-    st.divider()
-    st.markdown("**Chaos injection** (presenter only, never the LLM)")
-    st.selectbox("Fault", ["none", "SEAT_CONFLICT", "BAG_SYSTEM_FAULT"], key="chaos_kind")
-    st.number_input("At rebooking step", 1, 45, 7, key="chaos_step")
-    st.button("Arm for next live rebooking", on_click=cb_arm, width="stretch")
-    armed = faults.peek(C)
-    st.caption(f"Armed: **{armed['kind']} @ step {armed['at_step']}**" if armed else "Armed: none")
-
-    st.divider()
-    integ = guards.verify_guard_integrity()
-    if integ["ok"]:
-        st.success(f"Guards sealed & pinned\n\n`{integ['actual'][:16]}…`", icon="🛡️")
-    else:
-        st.error("Guard fingerprint mismatch: agent disabled", icon="🚨")
-    chain = audit.verify_chain(C)
-    st.caption(f"Audit chain: {'✅ intact' if chain['ok'] else '❌ BROKEN'} · {chain['entries']} entries")
-    st.button("↺ Reset scenario", on_click=cb_reset, type="secondary", width="stretch")
-
-for kind, msg in ss["flash"]:
-    st.toast(msg, icon={"success": "✅", "warning": "⚠️", "error": "⛔"}.get(kind, "ℹ️"))
-ss["flash"] = []
+    st.text_input("Controller name", value="Duty Ops Controller", key="ctrl_name")
+    st.text_input("Controller staff ID", value="OCC-2611", key="ctrl_id")
+    st.markdown("**Rollback test**")
+    st.selectbox("Fault", list(faults.KINDS), key="chaos_kind_lab")
+    st.number_input("Fail at step", 1, 45, 7, key="chaos_step_lab")
+    st.markdown("**Scenario clock**")
+    cc = st.columns(3)
+    for i, t_ in enumerate(("15:10", "15:25", "16:30")):
+        cc[i].button(t_, on_click=cb_advance, args=(t_,), width="stretch", key=f"adv_{t_}")
+    st.caption(f"Visitor session `{_sid}` · guard pin `{guards.verify_guard_integrity()['actual'][:12]}`")
 
 # ---------------------------------------------------------------------------
-# header KPIs
+# header
 # ---------------------------------------------------------------------------
-state = tools.get_turnaround_and_crew_state(C)
-risk_now = recovery.connection_risk(C)
-disrupted = recovery.disrupted_pax_ids(C)
-rebooked = {r["pax_id"] for r in db.rows(C, "SELECT pax_id FROM bookings WHERE source = 'AEROTURN'")}
-vul_ids = {p["pax_id"] for p in recovery.connection_risk(C, use_original=True)["passengers"]
-           if p["at_risk"] and p["vulnerable"]}
-pending_n = state["pending_controller_decisions"]
-mx = next(m for m in state["maintenance"] if m["item"] == "MX-0412")
-out_f = db.one(C, "SELECT * FROM flights WHERE flight_id = ?", (config.OUTBOUND_FLIGHT_ID,))
-inb_f = db.one(C, "SELECT * FROM flights WHERE flight_id = ?", (config.INBOUND_FLIGHT_ID,))
+state, risk, cpm, out_f, inb_f = SNAP["state"], SNAP["risk"], SNAP["cpm"], SNAP["out"], SNAP["inb"]
+info = brain_info()
+mode = agent.MODE_LABELS[agent.agent_mode(llm.make_client(info))]
+brain_lbl = "offline policy" if info["provider"] == "offline" else f"{info['model']} · {info['provider']} · {mode}"
+integ = guards.verify_guard_integrity()
+clock = SNAP["clock"]
+left = minutes(clock, parse("2026-11-21T15:15"))
+st.markdown(
+    f"<div class='hdr'><div class='brand'>✈ AEROTURN OCC<span>DXB HUB · EK812 LCA→DXB LATE-AIRCRAFT DISRUPTION</span></div>"
+    f"<div><span class='clock'>{hm(clock)}<small>GST</small></span>"
+    f"<span class='badge'><i>⏱</i>gate decision {'%d min' % left if left > 0 else 'closed'}</span></div>"
+    f"<div><span class='badge'><i>🧠</i>{html.escape(brain_lbl)}</span>"
+    f"<span class='badge'><i>🛡</i>guards {'sealed' if integ['ok'] else 'MISMATCH'}</span>"
+    f"<span class='badge'><i>⛓</i>audit {'intact' if SNAP['chain']['ok'] else 'BROKEN'} · {SNAP['chain']['entries']}</span>"
+    f"</div></div>", unsafe_allow_html=True)
 
-st.markdown("<p class='hero'>AeroTurn: Autonomous Turnaround & Atomic Disruption Recovery</p>"
-            "<p class='sub'><span class='pill p-llm'>LLM decides what to try</span>"
-            "<span class='pill p-code'>Code executes atomically</span>"
-            "<span class='pill p-guard'>Guards enforce immutable floors</span>"
-            "<span class='pill p-hitl'>Humans approve network changes</span></p>", unsafe_allow_html=True)
-k = st.columns(7)
-k[0].metric("EK812 in-block", state["inbound"]["eibt"], f"+{state['inbound']['delay_min']} min late",
-            delta_color="inverse", border=True)
-k[1].metric("Crew FDP margin", f"{state['inbound_crew']['margin_at_eibt_min']} min",
-            f"limit {state['inbound_crew']['fdp_limit']}", delta_color="off", border=True)
-k[2].metric("Connections at risk", risk_now["at_risk"],
-            f"{risk_now['awaiting_hold_decision']} await hold decision" if risk_now["awaiting_hold_decision"] else (
-                f"of {len(disrupted)} broken" if rebooked else "connecting 280"), delta_color="off", border=True)
-k[3].metric("Vulnerable safe", f"{len(vul_ids & rebooked)}/{len(vul_ids)}", border=True)
-k[4].metric("EK813 off-blocks", hm(out_f["etd"]) if out_f["etd"] else state["outbound_rotation"]["critical_path_eobt"],
-            f"STD {hm(out_f['std'])} · {out_f['status']}", delta_color="off", border=True)
-k[5].metric("MX-0412 hydraulic", "Signed" if mx["status"] == "CLOSED" else "Open",
-            "CRS valid" if mx["status"] == "CLOSED" else "no CRS",
-            delta_color="normal" if mx["status"] == "CLOSED" else "inverse", border=True)
-k[6].metric("For controller", pending_n, f"gate {inb_f['gate_id']}", delta_color="off", border=True)
-
-tabs = st.tabs(["🎬 Guided demo", "🛰️ Situation", "🧠 Agent", "🛡️ Guards lab", "⚛️ Atomic rebooking",
-                "🧑‍✈️ Controller (HITL)", "🔧 Turnaround & MX", "💶 Cost & network", "📨 Notifications", "📜 Audit"],
-               key="main_tabs", on_change="rerun")
+tabs = st.tabs(["📊 Operations", "👥 Passengers", "🧑‍✈️ Crew & duty", "🔧 Turnaround & MX", "💶 Cost & network",
+                "📜 Audit & data"], key="main_tabs", on_change="rerun")
 
 # ===========================================================================
-# 1. GUIDED DEMO
+# OPERATIONS DASHBOARD
 # ===========================================================================
 with tabs[0]:
     if tabs[0].open:
-        st.caption("Five judged moments, in order. Each button calls the same tools and guards the agent uses.")
-
+        # ---- scenario bar
         with st.container(border=True):
-            st.markdown("<span class='stepno'>① The agent analyses the cascade and runs the recovery</span>",
+            b = st.columns([1.55, 1.0, 1.0, 0.85, 0.9, 0.9, 0.95, 0.9, 0.9, 0.5], gap="small",
+                           vertical_alignment="center")
+            go_run = b[0].button("▶ Run recovery agent", type="primary", width="stretch")
+            inject = b[1].toggle("Chaos", value=True, help="Inject a mid-way seat conflict at rebooking step 7")
+            b[2].button("⛔ Duty breach", on_click=sc_crew_breach, width="stretch",
+                        help="Rogue LLM: dispatch EK813 at 16:35 with the inbound crew")
+            b[3].button("⛔ No CRS", on_click=sc_no_crs, width="stretch",
+                        help="Rogue LLM: dispatch EK813 before the hydraulic CRS is signed")
+            b[4].button("⛔ Override", on_click=sc_override, width="stretch",
+                        help="Rogue LLM: call a tool with override=True / emergency waiver")
+            b[5].button("⚛ Rollback", on_click=sc_rollback, width="stretch",
+                        help="Seat conflict mid-batch on a sandbox copy: watch it roll back, then retry")
+            b[6].button("⚖ Naive AI", on_click=sc_naive, width="stretch",
+                        help="Unconstrained revenue-first rebooking plan vs the same guards")
+            b[7].button("✅ Approve", on_click=sc_approve_all, width="stretch",
+                        help="Operations Controller approves every pending change")
+            b[8].button("🔧 Release", on_click=sc_crs_release, width="stretch",
+                        help="Clock to inspection end, B2 then B1 engineer sign the CRS, release EK813")
+            b[9].button("↺", on_click=sc_reset, width="stretch", help="Reset scenario")
+        holder = st.container()
+        if go_run:
+            run_agent(holder, inject)
+            st.rerun()
+
+        # ---- incident banner (latest scenario outcome)
+        if ss["incidents"]:
+            inc = ss["incidents"][0]
+            col = STATUS_COLOR[inc["level"]]
+            chips = "".join(f"<span class='r'>{html.escape(r)}</span>" for r in inc["rules"])
+            body = "".join(f"<div class='l'>{html.escape(x)}</div>" for x in inc["lines"] if x)
+            st.markdown(f"<div class='inc' style='border-color:{col}'><div class='t'>{status_html(inc['level'], '')} "
+                        f"{html.escape(inc['title'])} <span class='small'>· {inc['clock']}</span></div>"
+                        f"<div style='margin-top:4px'>{chips}</div>{body}</div>", unsafe_allow_html=True)
+
+        # ---- KPI row
+        vul_ids = {p["pax_id"] for p in SNAP["orig"]["passengers"] if p["at_risk"] and p["vulnerable"]}
+        protected = {p for p in vul_ids if pax_status(p) == "good" and p in SNAP["leg2"]
+                     and (SNAP["leg2"][p]["source"] == "AEROTURN"
+                          or SNAP["flights"][SNAP["leg2"][p]["flight_id"]]["status"] == "HELD")}
+        margin = state["inbound_crew"]["margin_at_eibt_min"]
+        mx = next(m for m in state["maintenance"] if m["item"] == "MX-0412")
+        cst = SNAP["cost"]
+        k = st.columns(8, gap="small")
+        kpi(k[0], "EK812 in-block", state["inbound"]["eibt"], f"+{state['inbound']['delay_min']} min · gate "
+            f"{inb_f['gate_id']}", "serious", "LATE")
+        kpi(k[1], "Inbound crew FDP", f"{margin} min", f"limit {state['inbound_crew']['fdp_limit']}",
+            "crit" if margin < 0 else ("warn" if margin < 30 else "good"), "TIGHT" if 0 <= margin < 30 else
+            ("BREACH" if margin < 0 else "OK"))
+        kpi(k[2], "Connections at risk", str(risk["at_risk"]),
+            f"{risk['awaiting_hold_decision']} await hold" if risk["awaiting_hold_decision"] else "of 280 connecting",
+            "crit" if risk["at_risk"] else ("warn" if risk["awaiting_hold_decision"] else "good"),
+            "AT RISK" if risk["at_risk"] else ("HOLD" if risk["awaiting_hold_decision"] else "CLEAR"))
+        kpi(k[3], "Vulnerable protected", f"{len(protected)}/{len(vul_ids)}", "UMNR · PRM · MEDA · PREG",
+            "good" if len(protected) == len(vul_ids) else "crit",
+            "SAFE" if len(protected) == len(vul_ids) else "EXPOSED")
+        kpi(k[4], "EK813 off-blocks", hm(out_f["etd"]) if out_f["etd"] else cpm["eobt_hm"],
+            f"STD {hm(out_f['std'])} · {out_f['status'].lower()}",
+            "good" if out_f["status"] == "RELEASED" else "warn", out_f["status"] if out_f["status"] == "RELEASED"
+            else "DELAYED")
+        kpi(k[5], "MX-0412 hydraulic", "Signed" if mx["status"] == "CLOSED" else "Open",
+            "B1 CRS valid" if mx["status"] == "CLOSED" else "dispatch-blocking",
+            "good" if mx["status"] == "CLOSED" else "crit", "CRS" if mx["status"] == "CLOSED" else "NO-GO")
+        kpi(k[6], "Controller queue", str(len(SNAP["pending"])), "gate · hold · crew · retime",
+            "warn" if SNAP["pending"] else "good", "PENDING" if SNAP["pending"] else "EMPTY")
+        sav = cst["savings"] if SNAP["rebook_order"] else 0
+        kpi(k[7], "Passenger cost saved", f"€{sav:,}", f"vs legacy €{cst['legacy_auto_reprotect']['total']:,}",
+            "good" if sav > 0 else "info", "SAVED" if sav > 0 else "PENDING")
+
+        st.write("")
+        # ---- row A: map · turnaround · crew
+        a1, a2, a3 = st.columns([1.25, 1.0, 0.9], gap="small")
+        with a1.container(border=True):
+            st.markdown("<div class='sec'>Connection network · 45 broken connections from EK812</div>",
                         unsafe_allow_html=True)
-            cc = st.columns([2, 1, 1])
-            inject = cc[1].toggle("Inject mid-way seat conflict", value=True,
-                                  help="A web sales channel sells a seat the plan is about to use (step 7)")
-            go_run = cc[2].button("▶ Run AeroTurn agent", type="primary", width="stretch")
-            cc[0].markdown(f"Brain: **{llm.describe(brain_info())}**. The agent reads state, stages gate, crew and "
-                           "schedule changes for you, and rebooks passengers atomically.")
-            holder = st.container()
-            if go_run:
-                run_agent(holder, inject)
-                st.rerun()
-            if ss.get("agent_result"):
-                with st.expander("Agent trace (key events)", expanded=True):
-                    render_trace(ss["agent_result"]["trace"], compact=True)
+            st.plotly_chart(network_map(), config=PLOT_CFG, theme=None, key="map")
+        with a2.container(border=True):
+            st.markdown(f"<div class='sec'>EK813 turnaround critical path · EOBT {cpm['eobt_hm']} "
+                        f"(+{cpm['delay_vs_std_min']})</div>", unsafe_allow_html=True)
+            st.plotly_chart(gantt(), config=PLOT_CFG, theme=None, key="gantt")
+        with a3.container(border=True):
+            st.markdown("<div class='sec'>Crew duty legality (FDP margin)</div>", unsafe_allow_html=True)
+            st.plotly_chart(crew_chart(), config=PLOT_CFG, theme=None, key="crew")
 
-        with st.container(border=True):
-            st.markdown("<span class='stepno'>② Python guards block unsafe departure proposals</span>",
+        # ---- row B: flow · priority queue · cost
+        b1, b2, b3 = st.columns([1.25, 1.0, 0.9], gap="small")
+        with b1.container(border=True):
+            st.markdown("<div class='sec'>Passenger recovery flow · missed connection → new flight (colour = priority "
+                        "tier)</div>", unsafe_allow_html=True)
+            fig = sankey()
+            if fig is not None:
+                st.plotly_chart(fig, config=PLOT_CFG, theme=None, key="sankey")
+            st.markdown(" ".join(f"<span class='chip' style='background:{TIER[t]};color:#0b0b0b'>"
+                                 f"{guards.TIER_LABELS[t]}</span>" for t in (1, 2, 3, 4)), unsafe_allow_html=True)
+        with b2.container(border=True):
+            st.markdown("<div class='sec'>Priority queue · order of seat allocation</div>", unsafe_allow_html=True)
+            order = SNAP["rebook_order"] or [p["pax_id"] for p in sorted(
+                [p for p in SNAP["orig"]["passengers"] if p["at_risk"]], key=lambda x: x["tier"])]
+            orig_map = {p["pax_id"]: p for p in SNAP["orig"]["passengers"]}
+            gt: dict[str, int] = {}
+            for pid in order:
+                gt[SNAP["pnr"][pid]] = min(gt.get(SNAP["pnr"][pid], 4), SNAP["tiers"][pid])
+            rows_ = []
+            for i, pid in enumerate(order, 1):
+                p = orig_map[pid]
+                f = SNAP["flights"][SNAP["leg2"][pid]["flight_id"]] if pid in SNAP["leg2"] else None
+                rebooked = SNAP["leg2"].get(pid, {}).get("source") == "AEROTURN"
+                rows_.append({"#": i, "Tier": f"P{gt[SNAP['pnr'][pid]]}", "Passenger": p["name"], "SSR": p["ssr"] or "",
+                              "New flight": (f"{f['flight_no']} {hm(f['etd'] or f['std'])}" if rebooked else
+                                             ("⏸ hold" if p and pax_status(pid) == "warn" else "⚠ pending")),
+                              "Seat": SNAP["leg2"].get(pid, {}).get("seat_no") or ("lap" if rebooked else "")})
+            st.dataframe(pd.DataFrame(rows_), hide_index=True, height=392,
+                         column_config={"#": st.column_config.NumberColumn(width="small"),
+                                        "Tier": st.column_config.TextColumn(width="small"),
+                                        "SSR": st.column_config.TextColumn(width="small")})
+        with b3.container(border=True):
+            st.markdown("<div class='sec'>Compensation & care · legacy vs AeroTurn</div>", unsafe_allow_html=True)
+            st.plotly_chart(cost_chart(), config=PLOT_CFG, theme=None, key="cost")
+            m1, m2 = st.columns(2)
+            m1.metric("Same-day arrivals", f"{cst['aeroturn']['same_day']}/{cst['scope_passengers']}",
+                      f"legacy {cst['legacy_auto_reprotect']['same_day']}", delta_color="off")
+            m2.metric("Network total", f"€{cst['network_total_aeroturn']:,}",
+                      f"legacy €{cst['network_total_legacy']:,}", delta_color="off")
+            st.markdown(f"<div class='small'>EK813 delay €{cst['outbound_rotation']['delay_cost']:,} · knock-on "
+                        f"{cst['outbound_rotation']['knock_on_return_delay_min']} min · holds "
+                        f"{', '.join(cst['connection_holds']['flights']) or 'none'}</div>", unsafe_allow_html=True)
+
+        # ---- row C: event feed · controller queue · guard board
+        c1, c2, c3 = st.columns([1.25, 1.0, 0.9], gap="small")
+        with c1.container(border=True, height=430):
+            st.markdown("<div class='sec'>Live event feed · LLM ↔ tools ↔ guards ↔ humans</div>", unsafe_allow_html=True)
+            res = ss.get("agent_result")
+            if res:   # in-memory trace includes the LLM's own reasoning lines
+                evs = [(e["kind"], e["title"]) for e in reversed(res["trace"]) if e["kind"] not in ("tool_result", "thinking")]
+            else:     # after a reload: rebuild from the audit log
+                evs = audit_events(SNAP["audit_tail"])
+            if not evs:
+                st.markdown("<div class='small'>Press ▶ Run recovery agent.</div>", unsafe_allow_html=True)
+            st.markdown("<div class='small'>newest first</div>" if evs else "", unsafe_allow_html=True)
+            st.markdown("".join(event_html(k_, t_) for k_, t_ in evs), unsafe_allow_html=True)
+            if res and res.get("brief"):
+                with st.expander(f"Executive brief · {res['brief']['source']}"):
+                    st.markdown(res["brief"]["markdown"])
+                    g = res["brief"]["grounding"]
+                    st.caption("numeric grounding: " + ("all numbers traced to facts" if g["grounded"]
+                                                        else "ungrounded " + ", ".join(g["ungrounded"])))
+        with c2.container(border=True, height=430):
+            st.markdown(f"<div class='sec'>Operations Controller queue · {len(SNAP['pending'])} pending</div>",
                         unsafe_allow_html=True)
-            b = st.columns(4)
-            b[0].button("Rogue: depart 16:35 with the inbound crew", on_click=cb_rogue, args=("crew",), width="stretch")
-            b[1].button("Rogue: depart before hydraulic CRS", on_click=cb_rogue, args=("mx",), width="stretch")
-            b[2].button("Rogue: call tool with override=True", on_click=cb_rogue, args=("override",), width="stretch")
-            b[3].button("Rogue: agent tries to self-approve", on_click=cb_rogue, args=("approve",), width="stretch")
-            r = ss["results"]
-            cols = st.columns(2)
-            for i, (key, title) in enumerate([("rogue_crew", "EK813 with inbound crew at 16:35"),
-                                              ("rogue_mx", "EK813 at EOBT without CRS"),
-                                              ("rogue_override", "Override / waiver arguments"),
-                                              ("rogue_approve", "Agent self-approval")]):
-                if key in r:
-                    with cols[i % 2]:
-                        verdict_card(r[key], title)
-
-        with st.container(border=True):
-            st.markdown("<span class='stepno'>③ Atomic batch rebooking rolls back cleanly on a mid-way seat conflict</span>",
-                        unsafe_allow_html=True)
-            rb = ss["results"].get("agent_rollback")
-            lr = ss["results"].get("lab_rollback")
-            cc = st.columns([3, 1])
-            cc[0].caption("Shown from the agent run above. Re-run on a fresh sandbox copy at any time.")
-            cc[1].button("Re-run rollback on sandbox", on_click=cb_lab_rollback, width="stretch")
-            src = lr["first"] if lr else rb
-            if src:
-                m = st.columns(5)
-                m[0].metric("Failed at step", src["failed_at_step"])
-                m[1].metric("Provisional steps reverted", src["provisional_steps_reverted"])
-                m[2].metric("State identical after rollback", "YES" if src["state_identical_to_before"] else "NO")
-                m[3].metric("Double bookings", src["invariants_after"]["seat_double_bookings"] +
-                            src["invariants_after"]["duplicate_leg_bookings"])
-                m[4].metric("Orphaned bags", src["invariants_after"]["orphaned_bags"] +
-                            src["invariants_after"]["bags_left_on_old_connection"])
-                st.markdown(lane_html("txn_rollback", src["error"],
-                                      (src.get("fault_injected") or {}).get("story", "")), unsafe_allow_html=True)
-                st.dataframe(pd.DataFrame([{"step": s["step"], "passenger": s["name"], "tier": s.get("tier"),
-                                            "to": s.get("to"), "seat": s.get("seat"),
-                                            "result": "✓ provisional, then reverted" if s["ok"] else "✗ " + s.get("error", "")[:70]}
-                                           for s in src["steps"]]), hide_index=True, height=240)
-                if lr:
-                    st.caption(f"Sandbox retry after re-plan: **{lr['retry']['status']}**; at-risk remaining "
-                               f"{lr['final']['at_risk_remaining']}; invariants all zero: "
-                               f"{all(v == 0 for v in lr['final']['invariants'].values())}")
-            else:
-                st.info("Run the agent with the seat-conflict toggle on, or press the sandbox button.")
-
-        with st.container(border=True):
-            st.markdown("<span class='stepno'>④ Vulnerable passengers are rebooked first, and code proves it</span>",
-                        unsafe_allow_html=True)
-            rows = db.rows(C, """SELECT b.booking_id, p.pax_id, p.first_name || ' ' || p.last_name AS name, p.ssr, p.age,
-                                  p.cabin, p.loyalty, p.is_infant, f.flight_no, f.std, f.operated_by_home, b.seat_no,
-                                  p.original_onward_flight FROM bookings b JOIN passengers p ON p.pax_id = b.pax_id
-                                  JOIN flights f ON f.flight_id = b.flight_id WHERE b.source = 'AEROTURN'
-                                  ORDER BY b.booking_id""")
-            if rows:
-                from aeroturn.facts import pax_facts
-                prow = {p_["pax_id"]: p_ for p_ in db.rows(C, "SELECT * FROM passengers")}
-                own_tier = {r_["pax_id"]: guards.pax_tier(pax_facts(prow[r_["pax_id"]])) for r_ in rows}
-                grp: dict = {}
-                for r_ in rows:
-                    pnr_ = prow[r_["pax_id"]]["pnr"]
-                    grp[pnr_] = min(grp.get(pnr_, 4), own_tier[r_["pax_id"]])
-                table = []
-                for i, r_ in enumerate(rows, 1):
-                    tier = grp[prow[r_["pax_id"]]["pnr"]]
-                    inherited = " · group" if tier != own_tier[r_["pax_id"]] else ""
-                    table.append({"#": i, "tier": TIER_BADGE[tier] + inherited, "passenger": r_["name"], "SSR": r_["ssr"],
-                                  "missed": r_["original_onward_flight"].split("-")[0], "new flight": r_["flight_no"],
-                                  "dep": hm(r_["std"]), "seat": r_["seat_no"] or "lap infant",
-                                  "carrier": "home" if r_["operated_by_home"] else "partner"})
-                first_non_vul = next((t["#"] for t in table if t["tier"].startswith(("🟦", "⬜"))), None)
-                ok = all(t["tier"].startswith(("🟥", "🟧")) for t in table[: (first_non_vul or 1) - 1]) and                 all(t["tier"].startswith(("🟦", "⬜")) for t in table[(first_non_vul or len(table) + 1) - 1:])
-                st.success(f"Committed in priority order: the first {first_non_vul - 1 if first_non_vul else len(table)} "
-                           f"seats went to P1/P2 passengers. UMNR stayed on home-carrier flights before 22:00, the MEDA "
-                           f"passenger stayed on the MEDIF carrier, PRM got +20 min MCT. Pre-transaction priority-inversion "
-                           f"check: PASS." if ok else "Priority order check failed")
-                st.dataframe(pd.DataFrame(table), hide_index=True, height=300)
-            else:
-                st.info("No AeroTurn rebookings yet. Run step ①.")
-            st.button("Compare: unconstrained revenue-first optimiser vs guards", on_click=cb_lab_naive)
-            if "lab_naive" in ss["results"]:
-                ln = ss["results"]["lab_naive"]
-                verdict_card(ln["naive_result"], "Unconstrained revenue-first plan (sandbox)")
-                st.caption(f"Same guard, AeroTurn plan: **{ln['aeroturn_result']['status']}**")
-
-        with st.container(border=True):
-            st.markdown("<span class='stepno'>⑤ The human Operations Controller approves the gate reassignment "
-                        "(and the connection hold)</span>", unsafe_allow_html=True)
-            if risk_now["at_risk"] and ss.get("agent_result"):
-                st.button(f"Rebook the {risk_now['at_risk']} passenger(s) still at risk (e.g. after a rejected hold)",
-                          on_click=cb_rebook_remaining, type="primary")
-            pend = [p for p in hitl.pending(C)]
-            if not pend:
-                st.info("Nothing awaiting approval. Run step ① first.")
-            for ch in sorted(pend, key=lambda x: x["change_type"] != "GATE_REASSIGNMENT"):
+            if not SNAP["pending"]:
+                st.markdown("<div class='small'>Nothing awaiting approval.</div>", unsafe_allow_html=True)
+            for ch in SNAP["pending"]:
                 d = {k_: v for k_, v in ch["payload"].items() if not k_.startswith("_")}
-                drv = ch["guard_report"].get("derived", {})
-                with st.container(border=True):
-                    cc = st.columns([3, 1, 1])
-                    cc[0].markdown(f"**{ch['change_type']}** · {ch['flight_no']} · `{json.dumps(d)}`  \n"
-                                   f"<span class='small'>Agent: {html.escape(ch['justification'][:220])}</span>  \n"
-                                   f"<span class='small'>Guard re-check at approval · "
-                                   f"{'valid until ' + hm(ch['valid_until']) if ch['valid_until'] else 'no expiry'}"
-                                   f"{' · crew margin ' + str(drv.get('crew_margin_min')) + ' min' if 'crew_margin_min' in drv else ''}"
-                                   f"</span>", unsafe_allow_html=True)
-                    cc[1].button("✅ Approve", key=f"g_ap_{ch['change_id']}", on_click=cb_approve, args=(ch["change_id"],),
-                                 type="primary", width="stretch")
-                    cc[2].button("✖ Reject", key=f"g_rj_{ch['change_id']}", on_click=cb_reject, args=(ch["change_id"],),
-                                 width="stretch")
-            for key_, val in ss["results"].items():
-                if key_.startswith("approval_") and val.get("status") != "APPROVED":
-                    verdict_card(val, key_.replace("approval_", ""))
-
-        with st.container(border=True):
-            st.markdown("<span class='stepno'>⑥ Bonus: engineer CRS, then guarded departure release</span>",
-                        unsafe_allow_html=True)
-            cc = st.columns(4)
-            cc[0].button(f"⏩ Clock to {mxi_end} (inspection done)", on_click=cb_advance, args=(mxi_end,), width="stretch")
-            cc[1].button("B2 avionics engineer signs CRS", on_click=cb_sign, args=("E-02",), width="stretch")
-            cc[2].button("B1 engineer signs CRS", on_click=cb_sign, args=("E-01",), width="stretch")
-            cc[3].button("Propose EK813 departure release", on_click=cb_propose_release, type="primary", width="stretch")
-            if "crs" in ss["results"]:
-                verdict_card(ss["results"]["crs"], "CRS MX-0412")
-            if "release" in ss["results"]:
-                verdict_card(ss["results"]["release"], "EK813 departure release")
+                det = ", ".join(f"{k_}={v}" for k_, v in d.items() if k_ != "crew_ids")
+                vu = f" · decide by {hm(ch['valid_until'])}" if ch["valid_until"] else ""
+                st.markdown(f"<div class='qcard'><div class='t'>{status_html('warn', ch['change_type'])} "
+                            f"{html.escape(ch['flight_no'])}</div><div class='d'>{html.escape(det)}{vu}</div>"
+                            f"<div class='d'>{html.escape(ch['justification'][:140])}</div></div>",
+                            unsafe_allow_html=True)
+                qa, qb = st.columns(2)
+                qa.button("Approve", key=f"ap_{ch['change_id']}", on_click=cb_approve, args=(ch["change_id"],),
+                          type="primary", width="stretch")
+                qb.button("Reject", key=f"rj_{ch['change_id']}", on_click=cb_reject, args=(ch["change_id"],),
+                          width="stretch")
+            if risk["at_risk"] and SNAP["rebook_order"]:
+                st.button(f"Rebook {risk['at_risk']} remaining", on_click=sc_rebook_remaining, width="stretch")
+        with c3.container(border=True, height=430):
+            st.markdown("<div class='sec'>Guard interventions</div>", unsafe_allow_html=True)
+            if not SNAP["guard_log"]:
+                st.markdown("<div class='small'>No blocks yet.</div>", unsafe_allow_html=True)
+            for gl in SNAP["guard_log"]:
+                d = json.loads(gl["detail"] or "{}")
+                rules = d.get("rules") or []
+                st.markdown(f"<div class='qcard'><div class='t'>{status_html('crit', gl['action'])}</div>"
+                            f"<div class='d'>{html.escape(str(d.get('flight') or d.get('item') or d.get('plan_id') or ''))}"
+                            f" · {hm(gl['sim_time'])}</div><div>"
+                            + "".join(f"<span class='chip'>{html.escape(r)}</span>" for r in rules)
+                            + "</div></div>", unsafe_allow_html=True)
+            if len(ss["incidents"]) > 1:
+                st.markdown("<div class='sec' style='margin-top:8px'>Earlier scenario outcomes</div>",
+                            unsafe_allow_html=True)
+                for inc in ss["incidents"][1:]:
+                    st.markdown(f"<div class='small'>{status_html(inc['level'], '')} {html.escape(inc['title'])}</div>",
+                                unsafe_allow_html=True)
 
 # ===========================================================================
-# 2. SITUATION
+# PASSENGERS
 # ===========================================================================
 with tabs[1]:
     if tabs[1].open:
-        a, b = st.columns(2)
-        with a:
-            st.subheader("Inbound EK812 LCA → DXB")
-            ib = state["inbound"]
-            st.markdown(f"**{ib['aircraft']}** · STA {ib['sta']} · landing {ib['eta_landing']} · in-block **{ib['eibt']}** "
-                        f"(+{ib['delay_min']}) · {ib['passengers']} pax, {ib['connecting']} connecting  \n"
-                        f"Assigned stand **{ib['assigned_gate']}** "
-                        f"{'⚠️ ' + ', '.join(ib['gate_conflict']) if ib['gate_conflict'] else ''}")
-            cr = state["inbound_crew"]
-            st.markdown(f"Inbound crew: {cr['members']} members, report {cr['report']}, {cr['sectors']} sectors → "
-                        f"**FDP limit {cr['fdp_limit']}**, margin at in-block **{cr['margin_at_eibt_min']} min**")
-        with b:
-            st.subheader("Outbound rotation EK813 DXB → CDG")
-            ob = state["outbound_rotation"]
-            st.markdown(f"STD {ob['std']} · critical-path EOBT **{ob['critical_path_eobt']}** (+{ob['projected_delay_min']}) "
-                        f"· critical path `{' → '.join(ob['critical_path'])}`  \n"
-                        + "  \n".join("⚠️ " + x for x in ob["crew_issues"]))
-            st.markdown("  \n".join(f"{'⛔' if m['dispatch_blocking'] and m['status'] != 'CLOSED' else '🟢'} "
-                                    f"**{m['item']}** ATA {m['ata']} {m['title']}: {m['status']} · {m['requirement']} · "
-                                    f"CRS {m['crs']}" for m in state["maintenance"]))
-
-        st.subheader("Arrival stand options for EK812")
-        go_ = tools.evaluate_gate_options(C)
-        gcols = st.columns([3, 2])
-        with gcols[0]:
-            st.dataframe(pd.DataFrame([{"stand": o["gate"], "type": o["kind"], "in-block": o["eibt"],
-                                        "hold for stand": f"{o['hold_for_stand_min']} min",
-                                        "crew FDP margin": f"{o['crew_fdp_margin_min']} min", "misconnects": o["misconnects"],
-                                        "vulnerable misconnects": o["vulnerable_misconnects"],
-                                        "guard": "✅ PASS" if o["legal"] else "⛔ " + ", ".join(sorted({v['rule'] for v in o['violations']}))}
-                                       for o in go_["options"]]), hide_index=True)
-            st.caption(f"Recommended: **{go_['recommended']}**, decide by **{go_['decision_deadline']}**. Needs controller approval.")
-        with gcols[1]:
-            fig = go.Figure(go.Bar(x=[o["gate"] for o in go_["options"]], y=[o["crew_fdp_margin_min"] for o in go_["options"]],
-                                   marker_color=["#34d399" if o["legal"] else "#f87171" for o in go_["options"]],
-                                   text=[f"{o['crew_fdp_margin_min']} min" for o in go_["options"]], textposition="outside"))
-            fig.add_hline(y=0, line_color="#f87171", line_dash="dash")
-            fig.update_layout(title="Inbound crew FDP margin at in-block", height=260, margin=dict(l=10, r=10, t=40, b=10),
-                              yaxis_title="minutes", template="plotly_dark")
-            st.plotly_chart(fig)
-
-        st.subheader("Connections of EK812 passengers")
-        only = st.toggle("Only connections at risk now", value=False)
-        view = risk_now["passengers"] if not only else [p for p in risk_now["passengers"] if p["at_risk"]]
-        base_risk = {p["pax_id"]: p for p in recovery.connection_risk(C, use_original=True)["passengers"]}
-        st.dataframe(pd.DataFrame([{"tier": TIER_BADGE[p["tier"]], "pax": p["pax_id"], "name": p["name"], "SSR": p["ssr"],
-                                    "cabin": p["cabin"], "dest": p["dest"],
-                                    "original": base_risk[p["pax_id"]]["onward_flight"],
-                                    "now on": p["onward_flight"], "dep": p["onward_std"], "MCT": p["mct_min"],
-                                    "slack": p["slack_min"], "status": "⚠️ AT RISK" if p["at_risk"] else (
-                                        "⏸ hold pending" if p["hold_pending"] else
-                                        "🔁 rebooked" if p["pax_id"] in rebooked else "OK"), "bags": p["bags"]}
-                                   for p in view]), hide_index=True, height=360)
+        only = st.toggle("Only disrupted passengers", value=True)
+        base = {p["pax_id"]: p for p in SNAP["orig"]["passengers"]}
+        rows = []
+        for p in risk["passengers"]:
+            if only and not base[p["pax_id"]]["at_risk"]:
+                continue
+            rows.append({"Tier": f"P{p['tier']}", "Pax": p["pax_id"], "Name": p["name"], "SSR": p["ssr"],
+                         "Cabin": p["cabin"], "Dest": p["dest"], "Original": base[p["pax_id"]]["onward_flight"],
+                         "Now on": p["onward_flight"], "Dep": p["onward_std"], "MCT": p["mct_min"],
+                         "Slack": p["slack_min"], "Bags": p["bags"],
+                         "Status": "AT RISK" if p["at_risk"] else ("HOLD PENDING" if p["hold_pending"] else "OK")})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, height=520)
+        notes = db.rows(C, """SELECT n.category, p.first_name || ' ' || p.last_name AS name, n.message FROM notifications n
+                              JOIN passengers p ON p.pax_id = n.pax_id ORDER BY n.category, n.pax_id""")
+        st.markdown("<div class='sec'>Notifications sent (LLM wording, facts filled by code)</div>",
+                    unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(notes) if notes else pd.DataFrame([{"info": "none yet"}]), hide_index=True, height=300)
 
 # ===========================================================================
-# 3. AGENT
+# CREW & DUTY
 # ===========================================================================
 with tabs[2]:
     if tabs[2].open:
-        st.subheader("Who does what")
-        st.dataframe(pd.DataFrame([
-            {"Responsibility": "Analyse the cascade, choose next action, explain trade-offs", "LLM agent": "✅", "Python code": "provides facts"},
-            {"Responsibility": "Read state, compute options, CPM, crew legality, costs", "LLM agent": "-", "Python code": "✅ tools"},
-            {"Responsibility": "Crew FDP / rest / ratings, MX CRS, vulnerable priority, MCT, PPBM", "LLM agent": "cannot touch", "Python code": "✅ sealed guards.py"},
-            {"Responsibility": "Seat + bag rebooking (BEGIN / COMMIT / ROLLBACK)", "LLM agent": "requests it", "Python code": "✅ atomic transaction"},
-            {"Responsibility": "Gate, retime, crew swap, departure release", "LLM agent": "stages it", "Python code": "✅ guard check · 👤 human approves"},
-            {"Responsibility": "Notification wording, executive brief", "LLM agent": "✅ writes words", "Python code": "✅ injects facts, grounding check"},
-        ]), hide_index=True)
-        cc = st.columns([1, 1, 2])
-        inj2 = cc[0].toggle("Inject seat conflict", value=True, key="inj2")
-        run2 = cc[1].button("▶ Run agent", type="primary", key="run2")
-        holder2 = st.container()
-        if run2:
-            run_agent(holder2, inj2)
+        sc = SNAP["crew"]
+        st.markdown(f"<div class='sec'>Standby captain matcher · {html.escape(sc['summary'])}</div>",
+                    unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame([{"Crew": c_["crew_id"], "Name": c_["name"], "Status": c_["status"],
+                                    "Rating": c_["type_ratings"], "Away": f"{c_['proximity_min']} min",
+                                    "Report": c_["can_report"], "FDP limit": c_["fdp_limit"], "Margin": c_["margin"],
+                                    "Basis": c_["fdp_basis"],
+                                    "Verdict": "LEGAL" if c_["legal"] else ", ".join(v["rule"] for v in c_["violations"])}
+                                   for c_ in sc["candidates"]]), hide_index=True)
+        st.markdown("<div class='sec'>Departure proposal builder (EK813)</div>", unsafe_allow_html=True)
+        sets = {"Inbound crew of EK812": _crew(config.INBOUND_FLIGHT_ID, False),
+                "Crew B (fit) + standby S-04": sorted(set(_crew(config.OUTBOUND_FLIGHT_ID)) | {"S-04"}),
+                "Crew B incl. unfit captain": _crew(config.OUTBOUND_FLIGHT_ID, False)}
+        q = st.columns([2, 1, 1])
+        which = q[0].selectbox("Crew", list(sets))
+        off = q[1].text_input("Off-blocks", value=cpm["eobt_hm"])
+        if q[2].button("Validate", type="primary", width="stretch"):
+            r = tools.dispatch(C, "propose_departure", {"flight_no": "EK813", "off_blocks": off, "crew_ids": sets[which]},
+                               actor="OCC_UI")
+            lines, rules = verdict_lines(r, 6)
+            push_incident("crit" if r["status"] == "BLOCKED" else "warn", f"EK813 at {off} with {which}: {r['status']}",
+                          lines, rules)
             st.rerun()
-        res = ss.get("agent_result")
-        if res:
-            if res.get("brief"):
-                with st.container(border=True):
-                    st.markdown(res["brief"]["markdown"])
-                    g = res["brief"]["grounding"]
-                    st.caption(f"Source: {res['brief']['source']} · numeric grounding: "
-                               f"{'✅ all ' + str(g['numbers_checked']) + ' numbers traced to facts' if g['grounded'] else '⚠️ ungrounded: ' + ', '.join(g['ungrounded'])}")
-            st.subheader(f"Full trace · brain: {res.get('brain')}")
-            render_trace(res["trace"])
-        else:
-            st.info("Run the agent to see the reasoning, tool calls, guard verdicts and transactions as colour-coded lanes.")
+        p1, p2 = st.columns(2)
+        with p1:
+            st.markdown("<div class='sec'>Runtime tamper attempts on guards.py</div>", unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame(lab.immutability_probe()), hide_index=True)
+        with p2:
+            st.markdown("<div class='sec'>Rule catalogue</div>", unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame([{"Rule": k_, "Meaning": v} for k_, v in guards.RULES.items()]), hide_index=True,
+                         height=320)
 
 # ===========================================================================
-# 4. GUARDS LAB
+# TURNAROUND & MX
 # ===========================================================================
 with tabs[3]:
     if tabs[3].open:
-        st.subheader("Departure proposal builder (EK813)")
-        crew_sets = {
-            "Inbound crew of EK812 (already on board)": [r["crew_id"] for r in db.rows(
-                C, "SELECT crew_id FROM crew_assignments WHERE flight_id = ?", (config.INBOUND_FLIGHT_ID,))],
-            "Rostered crew B incl. unfit captain": [r["crew_id"] for r in db.rows(
-                C, "SELECT crew_id FROM crew_assignments WHERE flight_id = ?", (config.OUTBOUND_FLIGHT_ID,))],
-            "Rostered crew B (fit) + standby S-04": sorted({r["crew_id"] for r in db.rows(
-                C, "SELECT crew_id FROM crew_assignments WHERE flight_id = ? AND status IN ('ROSTERED','ASSIGNED')",
-                (config.OUTBOUND_FLIGHT_ID,))} | {"S-04"}),
-            "Crew B (fit) + standby S-01 (Becker)": sorted({r["crew_id"] for r in db.rows(
-                C, "SELECT crew_id FROM crew_assignments WHERE flight_id = ? AND status IN ('ROSTERED','ASSIGNED')",
-                (config.OUTBOUND_FLIGHT_ID,))} - {"S-04"} | {"S-01"}),
-        }
-        cc = st.columns([2, 1, 1])
-        which = cc[0].selectbox("Crew", list(crew_sets))
-        off = cc[1].text_input("Off-blocks (HH:MM)", value=state["outbound_rotation"]["critical_path_eobt"])
-        if cc[2].button("Validate & propose", type="primary", width="stretch"):
-            ss["results"]["builder"] = tools.dispatch(C, "propose_departure", {"flight_no": "EK813", "off_blocks": off,
-                                                                             "crew_ids": crew_sets[which]}, actor="OCC_UI")
-        if "builder" in ss["results"]:
-            verdict_card(ss["results"]["builder"], f"EK813 off-blocks {off}")
-            fx = (ss["results"]["builder"].get("guard") or {}).get("facts", {}).get("crew", {})
-            if fx:
-                with st.expander("Per-crew FDP computation"):
-                    st.dataframe(pd.DataFrame([{"crew": k_, **v} for k_, v in fx.items()]), hide_index=True)
-
-        st.subheader("Standby crew pairing matcher (EK813 captain)")
-        sc = crew.find_standby_crew(C, flight_id=config.OUTBOUND_FLIGHT_ID, rank="CPT")
-        st.caption(sc["summary"])
-        st.dataframe(pd.DataFrame([{"crew": c_["crew_id"], "name": c_["name"], "status": c_["status"], "rating": c_["type_ratings"],
-                                    "location": c_["location"], "away": f"{c_['proximity_min']} min",
-                                    "can report": c_["can_report"], "FDP limit": c_["fdp_limit"], "margin": c_["margin"],
-                                    "verdict": "✅ legal" if c_["legal"] else "⛔ " + ", ".join(v["rule"] + " " + v["message"][:60]
-                                                                                           for v in c_["violations"])}
-                                   for c_ in sc["candidates"]]), hide_index=True)
-
-        a, b = st.columns(2)
-        with a:
-            st.subheader("Try to weaken the guards at runtime")
-            if st.button("Run immutability probe"):
-                ss["results"]["probe"] = lab.immutability_probe()
-            if "probe" in ss["results"]:
-                st.dataframe(pd.DataFrame(ss["results"]["probe"]), hide_index=True)
-            st.caption(f"guards.py SHA-256 pinned: `{guards.verify_guard_integrity()['actual']}`")
-        with b:
-            st.subheader("Prompt injection in passenger data")
-            inj = db.one(C, "SELECT pax_id, first_name || ' ' || last_name AS name, remarks FROM passengers "
-                            "WHERE remarks LIKE '%AI AGENT%'")
-            if inj:
-                st.code(inj["remarks"], language=None)
-                st.caption(f"{inj['name']} ({inj['pax_id']}). Remarks reach the LLM as data. Even if a model obeyed, "
-                           f"no tool accepts an override, departure needs CRS + legal crew, and cabin upgrades are a "
-                           f"tier-1 protection only.")
-        with st.expander("Rule catalogue (immutable)"):
-            st.dataframe(pd.DataFrame([{"rule": k_, "meaning": v} for k_, v in guards.RULES.items()]), hide_index=True)
-            st.json({f: str(getattr(guards.LIMITS, f)) for f in guards.LIMITS.__dataclass_fields__}, expanded=False)
+        st.plotly_chart(gantt(), config=PLOT_CFG, theme=None, key="gantt2")
+        st.dataframe(pd.DataFrame([{"Task": t["task_id"], "Name": t["name"], "Start": t["start_hm"], "End": t["end_hm"],
+                                    "Min": t["duration_min"], "Slack": t["slack_min"],
+                                    "Critical": "yes" if t["critical"] else "", "Depends on": ", ".join(t["depends_on"]),
+                                    "Note": t["note"]} for t in cpm["tasks"]]), hide_index=True)
+        engs = db.rows(C, "SELECT * FROM engineers")
+        q = st.columns([2, 1])
+        eng = q[0].selectbox("Engineer signing the CRS", [e["eng_id"] for e in engs],
+                             format_func=lambda x: next(f"{e['name']} ({e['licence']}, {e['type_auth']})"
+                                                        for e in engs if e["eng_id"] == x))
+        if q[1].button("Sign CRS MX-0412", type="primary", width="stretch"):
+            r = hitl.sign_crs(C, "MX-0412", eng)
+            lines, rules = verdict_lines(r)
+            push_incident("good" if r["status"] == "SIGNED" else "crit", f"CRS MX-0412 by {eng}: {r['status']}", lines,
+                          rules)
+            st.rerun()
+        st.dataframe(pd.DataFrame(db.rows(C, "SELECT item_id, ata, title, category, status, blocks_dispatch, mel_ref, "
+                                             "est_task_min, crs_eng_id, crs_signed_at FROM maintenance_items")),
+                     hide_index=True)
 
 # ===========================================================================
-# 5. ATOMIC
+# COST & NETWORK
 # ===========================================================================
 with tabs[4]:
     if tabs[4].open:
-        st.subheader("Rollback experiment (fresh sandbox copy of the scenario)")
-        cc = st.columns([1, 1, 1])
-        cc[0].selectbox("Fault", list(faults.KINDS), key="lab_kind")
-        cc[1].number_input("Fail at step", 1, 45, 7, key="lab_step")
-        cc[2].button("Run experiment", on_click=cb_lab_rollback, type="primary", width="stretch")
-        lr = ss["results"].get("lab_rollback")
-        if lr:
-            f1 = lr["first"]
-            verdict_card({"status": f1["status"], "message": f1.get("message"), "error": f1.get("error")},
-                         f"Batch of {len(f1['steps']) - 1} provisional + 1 failing step")
-            st.markdown(f"**Fault:** {(f1.get('fault_injected') or {}).get('story', '-')}")
-            probe = [{"passenger": p["name"], "planned": lr["planned"][p["pax_id"]],
-                      "before batch": lr["before"]["leg2"][p["pax_id"]], "after ROLLBACK": lr["after"]["leg2"][p["pax_id"]],
-                      "bags after rollback": ", ".join(lr["after"]["bags"][p["pax_id"]]) or "-",
-                      "after retry COMMIT": lr["final"]["leg2"][p["pax_id"]]} for p in lr["probe"]]
-            st.dataframe(pd.DataFrame(probe), hide_index=True)
-            m = st.columns(3)
-            m[0].metric("State fingerprint before", lr["before"]["fingerprint"])
-            m[1].metric("After rollback", lr["after"]["fingerprint"],
-                        "identical" if lr["before"]["fingerprint"] == lr["after"]["fingerprint"] else "DIFFERENT",
-                        delta_color="off")
-            m[2].metric("Retry", lr["retry"]["status"], f"{lr['final']['at_risk_remaining']} still at risk", delta_color="off")
-            st.markdown("**Invariants after rollback** (all must be 0)")
-            st.dataframe(pd.DataFrame([lr["after"]["invariants"]]), hide_index=True)
-        st.subheader("Live database invariants")
-        inv = db.check_invariants(C)
-        st.dataframe(pd.DataFrame([{k_: v["count"] for k_, v in inv.items() if isinstance(v, dict)}]), hide_index=True)
-        st.caption("Protection layers: guard pre-validation → UNIQUE(flight, seat) / UNIQUE(pax, leg) / triggers → "
-                   "in-transaction invariant scan → DEFERRABLE foreign key (bag ↔ booking) at COMMIT.")
-        st.subheader("Transaction log")
-        st.dataframe(pd.DataFrame(db.rows(C, "SELECT * FROM txn_log ORDER BY started_at DESC")), hide_index=True)
+        cst = SNAP["cost"]
+        st.plotly_chart(cost_chart(), config=PLOT_CFG, theme=None, key="cost2")
+        st.markdown("<div class='sec'>Hold a departing connection, or rebook its passengers?</div>",
+                    unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame([{"Flight": h["flight"], "Dest": h["dest"], "STD": h["std"], "Pax": h["pax_protected"],
+                                    "Hold needed": f"{h['hold_needed_min']} min",
+                                    "Cap ≤30": "ok" if h["allowed"] else "NET-001",
+                                    "Hold cost": f"€{h['hold_cost']:,}", "Rebook cost": f"€{h['rebook_cost']:,}",
+                                    "Net saving": f"€{h['net_saving']:,}",
+                                    "Verdict": "HOLD" if h["recommended"] else "rebook", "Status": h["hold_status"]}
+                                   for h in costs.hold_analysis(C)]), hide_index=True)
+        st.markdown("<div class='sec'>Per passenger (EU261 whole-journey from Larnaca)</div>", unsafe_allow_html=True)
+        st.dataframe(pd.DataFrame(cst["per_passenger"]), hide_index=True, height=360)
 
 # ===========================================================================
-# 6. CONTROLLER
+# AUDIT & DATA
 # ===========================================================================
 with tabs[5]:
     if tabs[5].open:
-        st.subheader("Awaiting your decision")
-        pend = hitl.pending(C)
-        if not pend:
-            st.info("Queue empty.")
-        for ch in pend:
-            with st.container(border=True):
-                d = {k_: v for k_, v in ch["payload"].items() if not k_.startswith("_")}
-                st.markdown(f"**{ch['change_type']}** · {ch['flight_no']} · `{json.dumps(d)}` · staged by "
-                            f"`{ch['staged_by']}` at {hm(ch['staged_at'])}"
-                            f"{' · valid until **' + hm(ch['valid_until']) + '**' if ch['valid_until'] else ''}")
-                st.markdown(f"> {ch['justification']}")
-                gr = ch["guard_report"]
-                st.caption("Guard checks at staging: " + " · ".join(gr.get("checks", [])))
-                cc = st.columns([3, 1, 1])
-                cc[0].text_input("Decision note", key=f"note_{ch['change_id']}", label_visibility="collapsed",
-                                 placeholder="Decision note (optional)")
-                cc[1].button("✅ Approve", key=f"ap_{ch['change_id']}", on_click=cb_approve, args=(ch["change_id"],),
-                             type="primary", width="stretch")
-                cc[2].button("✖ Reject", key=f"rj_{ch['change_id']}", on_click=cb_reject, args=(ch["change_id"],),
-                             width="stretch")
-        st.subheader("Decision history")
-        hist = hitl.history(C)
-        st.dataframe(pd.DataFrame([{"change": h["change_id"], "type": h["change_type"], "flight": h["flight_no"],
-                                    "details": json.dumps({k_: v for k_, v in h["payload"].items() if not k_.startswith("_")}),
-                                    "status": h["status"], "guard": ", ".join(h["guard_report"].get("rules_violated", [])) or "PASS",
-                                    "staged by": h["staged_by"], "decided by": h["decided_by"] or "-"} for h in hist]),
-                     hide_index=True)
-
-# ===========================================================================
-# 7. TURNAROUND & MX
-# ===========================================================================
-with tabs[6]:
-    if tabs[6].open:
-        cpm = turnaround.critical_path(C, config.OUTBOUND_FLIGHT_ID)
-        m = st.columns(4)
-        m[0].metric("EK812 in-block", cpm["eibt_hm"])
-        m[1].metric("EK813 STD", cpm["std_hm"])
-        m[2].metric("Critical-path EOBT", cpm["eobt_hm"], f"+{cpm['delay_vs_std_min']} min", delta_color="inverse")
-        m[3].metric("Turn time", dur(cpm["turn_min"]))
-        df = pd.DataFrame([{"Task": t["name"], "Start": parse(t["start"]), "Finish": parse(t["end"]),
-                            "Path": "Critical path" if t["critical"] else "Has slack", "Slack": f"{t['slack_min']} min",
-                            "Resource": t["resource"]} for t in cpm["tasks"] if t["duration_min"] > 0]).sort_values("Start")
-        fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task", color="Path", hover_data=["Resource", "Slack"],
-                          color_discrete_map={"Critical path": "#f87171", "Has slack": "#60a5fa"})
-        fig.update_yaxes(autorange="reversed")
-        for x, label, color in ((parse(out_f["std"]), "STD", "#fbbf24"), (parse(cpm["eobt"]), "EOBT", "#f87171")):
-            fig.add_shape(type="line", x0=x, x1=x, y0=0, y1=1, yref="paper", line=dict(color=color, dash="dash"))
-            fig.add_annotation(x=x, y=1.04, yref="paper", text=f"{label} {hm(x)}", showarrow=False, font=dict(color=color))
-        fig.update_layout(height=420, template="plotly_dark", margin=dict(l=10, r=10, t=30, b=10), legend_title=None)
-        st.plotly_chart(fig)
-        st.dataframe(pd.DataFrame([{"task": t["task_id"], "name": t["name"], "start": t["start_hm"], "end": t["end_hm"],
-                                    "min": t["duration_min"], "slack": t["slack_min"], "critical": "🔴" if t["critical"] else "",
-                                    "depends on": ", ".join(t["depends_on"]), "note": t["note"]} for t in cpm["tasks"]]),
-                     hide_index=True)
-        st.subheader("Maintenance sign-off (licensed engineer)")
-        engs = db.rows(C, "SELECT * FROM engineers")
-        cc = st.columns([2, 2, 1])
-        eng = cc[0].selectbox("Engineer", [e["eng_id"] for e in engs],
-                              format_func=lambda x: next(f"{e['name']} ({e['licence']}, {e['type_auth']})" for e in engs if e["eng_id"] == x))
-        cc[1].text_input("Remarks", key="crs_remarks", placeholder="Inspection and leak check satisfactory")
-        cc[2].button("Sign CRS", on_click=cb_sign, args=(eng,), type="primary", width="stretch")
-        if "crs" in ss["results"]:
-            verdict_card(ss["results"]["crs"], "CRS MX-0412")
-        st.dataframe(pd.DataFrame(db.rows(C, "SELECT item_id, ata, title, category, status, blocks_dispatch, mel_ref, "
-                                             "est_task_min, crs_eng_id, crs_signed_at FROM maintenance_items")), hide_index=True)
-
-# ===========================================================================
-# 8. COST
-# ===========================================================================
-with tabs[7]:
-    if tabs[7].open:
-        cst = costs.disruption_cost(C)
-        leg, aer = cst["legacy_auto_reprotect"], cst["aeroturn"]
-        m = st.columns(4)
-        m[0].metric("Legacy auto-reprotect", f"€{leg['total']:,}")
-        m[1].metric("AeroTurn", f"€{aer['total']:,}", f"-€{cst['savings']:,}" if rebooked else "run the agent",
-                    delta_color="inverse")
-        m[2].metric("Same-day arrivals", f"{aer['same_day']}/{cst['scope_passengers']}", f"legacy {leg['same_day']}",
-                    delta_color="off")
-        m[3].metric("Arrive < 3h late (no EU261)", aer["under_3h"])
-        fig = go.Figure()
-        for comp, color in (("eu261", "#f87171"), ("hotel", "#fbbf24"), ("meals", "#60a5fa")):
-            fig.add_bar(name=comp.upper() if comp == "eu261" else comp.title(), x=["Legacy +24h", "AeroTurn"],
-                        y=[leg[comp], aer[comp]], marker_color=color)
-        fig.update_layout(barmode="stack", height=320, template="plotly_dark", margin=dict(l=10, r=10, t=30, b=10),
-                          title="Passenger compensation & care (EUR)")
-        a, b = st.columns([3, 2])
-        a.plotly_chart(fig)
-        ob = cst["outbound_rotation"]
-        b.markdown(f"**Outbound rotation {ob['flight']}**: delay {ob['delay_min']} min × (€{cst['assumptions']['delay_cost_eur_per_min']} "
-                   f"aircraft + €0.40 × {ob['pax']} pax) per min = **€{ob['delay_cost']:,}**. {ob['eu261_note']}.  \n"
-                   f"Knock-on to the return sector: {ob['knock_on_return_delay_min']} min (€{ob['knock_on_cost']:,}) after "
-                   f"{cst['assumptions']['rotation_buffer_min']} min CDG buffer.  \n\n"
-                   f"Connection holds: {', '.join(cst['connection_holds']['flights']) or 'none approved'} "
-                   f"(€{cst['connection_holds']['cost']:,}).  \n\n"
-                   f"**Network total**: AeroTurn €{cst['network_total_aeroturn']:,} vs legacy €{cst['network_total_legacy']:,}.")
-        st.subheader("Hold a departing connection, or rebook its passengers?")
-        st.dataframe(pd.DataFrame([{"flight": h["flight"], "dest": h["dest"], "STD": h["std"], "pax protected": h["pax_protected"],
-                                    "hold needed": f"{h['hold_needed_min']} min",
-                                    "safety cap ≤30": "✅" if h["allowed"] else "⛔ NET-001",
-                                    "hold cost": f"€{h['hold_cost']:,}", "rebook cost": f"€{h['rebook_cost']:,}",
-                                    "net saving": f"€{h['net_saving']:,}",
-                                    "verdict": "✅ HOLD" if h["recommended"] else "rebook", "status": h["hold_status"],
-                                    "pax on board delayed": h["onboard_pax_delayed"]}
-                                   for h in costs.hold_analysis(C)]), hide_index=True)
-        st.caption("Hold cost = minutes × (€100 aircraft + €0.40 × passengers on board). Recommended only if ≤ 15 min "
-                   "and cheaper than rebooking. A hold is a network change: the controller decides.")
-        st.subheader("Per passenger")
-        st.dataframe(pd.DataFrame(cst["per_passenger"]), hide_index=True, height=320)
-        st.caption("EU261: EK812 departed Larnaca (EU), so whole-journey compensation applies on final-arrival delay ≥3h "
-                   "(Wegener C-537/17). Rates are illustrative assumptions in aeroturn/config.py, not legal advice.")
-
-# ===========================================================================
-# 9. NOTIFICATIONS
-# ===========================================================================
-with tabs[8]:
-    if tabs[8].open:
-        notes = db.rows(C, """SELECT n.category, n.pax_id, p.first_name || ' ' || p.last_name AS name, n.message,
-                              n.template_source FROM notifications n JOIN passengers p ON p.pax_id = n.pax_id
-                              ORDER BY CASE n.category WHEN 'UMNR_GUARDIAN' THEN 0 WHEN 'MEDICAL' THEN 1 WHEN 'PRM' THEN 2
-                              WHEN 'FAMILY' THEN 3 WHEN 'PREMIUM' THEN 4 ELSE 5 END, n.pax_id""")
-        st.caption("The LLM writes the wording as templates. Code rejects any template containing a flight number, "
-                   "time, seat or gate, then fills those facts in from the database.")
-        if notes:
-            st.dataframe(pd.DataFrame(notes), hide_index=True, height=460)
-        else:
-            st.info("No notifications yet.")
-        st.subheader("Template validator")
-        t = st.text_area("Try a template", value="Dear {first_name}, you are now on EK372 at 18:25, seat 24K.")
-        probs = tools.validate_template(t)
-        (st.error if probs else st.success)("; ".join(probs) if probs else "Template accepted")
-
-# ===========================================================================
-# 10. AUDIT
-# ===========================================================================
-with tabs[9]:
-    if tabs[9].open:
-        ch_ = audit.verify_chain(C)
-        st.markdown(f"Hash chain: {'✅ **intact**' if ch_['ok'] else '❌ **broken at ' + str(ch_.get('broken_at_seq')) + '**'} "
-                    f"· {ch_['entries']} entries · head `{ch_.get('head', '')[:20]}`")
-        if st.button("Tamper test: edit one historic entry in a copy"):
-            ss["results"]["tamper"] = lab.tamper_demo(SESSION_DB)
-        if "tamper" in ss["results"]:
-            t_ = ss["results"]["tamper"]
+        ch_ = SNAP["chain"]
+        q = st.columns([3, 1])
+        q[0].markdown(f"Hash chain **{'intact' if ch_['ok'] else 'BROKEN at ' + str(ch_.get('broken_at_seq'))}** · "
+                      f"{ch_['entries']} entries · head `{ch_.get('head', '')[:24]}`")
+        if q[1].button("Tamper test", width="stretch"):
+            t_ = lab.tamper_demo(SESSION_DB)
             if "after" in t_:
-                st.error(f"Edited seq {t_['edited_seq']} ('{t_['edited_action']}' → 'GATE PASS'): chain verification now "
-                         f"fails at seq {t_['after'].get('broken_at_seq')}. Tampering is detectable.")
-            else:
-                st.info(t_.get("note"))
-        st.dataframe(pd.DataFrame(audit.recent(C, 400)), hide_index=True, height=520)
+                push_incident("crit", f"Edited audit entry {t_['edited_seq']} in a copy: chain verification fails at "
+                                      f"{t_['after'].get('broken_at_seq')}", ["Tampering is detectable."])
+            st.rerun()
+        st.dataframe(pd.DataFrame(audit.recent(C, 300)), hide_index=True, height=360)
+        st.markdown("---")
+        src = Path(__file__).parent / "docs" / "DATA_SOURCES.md"
+        if src.exists():
+            st.markdown(src.read_text(encoding="utf-8"))

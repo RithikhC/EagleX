@@ -4,7 +4,7 @@
 
 [![Open the live demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://aeroturn-eaglex.streamlit.app)
 
-**Live demo: https://aeroturn-eaglex.streamlit.app**. Start at the 🎬 *Guided demo* tab. Every visitor gets
+**Live demo: https://aeroturn-eaglex.streamlit.app**. The 📊 *Operations* dashboard opens first; each scenario is one button in the bar at the top. Every visitor gets
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
@@ -41,7 +41,7 @@ asleep, the first load takes about a minute.
 
 ```powershell
 pip install -r requirements.txt
-streamlit run app.py          # OCC console at http://localhost:8501  (start at the "Guided demo" tab)
+streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
 python -m pytest -q           # 60 tests
 ```
@@ -221,13 +221,37 @@ Every dataset, public source (EASA flight-time rules, Part-66, ICAO Annex 17, EU
 - Single-node SQLite. In production, the same pattern maps to `SERIALIZABLE` transactions in a reservation
   system, plus an outbox for BHS/DCS messages.
 
-## More screenshots
+## The dashboard
 
-| Guards vs. a rogue LLM, and atomic rollback | Turnaround critical path |
-|---|---|
-| ![guards](docs/img/guards_rollback.png) | ![turnaround](docs/img/turnaround.png) |
+One screen, with a scenario bar across the top. Each button runs one judged scenario against the live state,
+and the panels update in place.
 
-![cost](docs/img/cost.png)
+| Button | Scenario | What the dashboard shows |
+|---|---|---|
+| ▶ Run recovery agent (+ Chaos) | The LLM agent runs the full recovery; a seat is sold mid-batch | Incident banner, event feed (LLM ↔ tools ↔ guards), KPIs go 45 → 0 at risk, 0/10 → 10/10 vulnerable safe, map arcs turn green |
+| ⛔ Duty breach | Rogue LLM dispatches EK813 with the inbound crew | Banner: BLOCKED, FTL-001 for every crew member + TURN-001 + MX-001 |
+| ⛔ No CRS | Legal crew, but the hydraulic CRS is unsigned | Banner: BLOCKED, MX-001 |
+| ⛔ Override | Tool call with `override=True` | Banner: REJECTED, no override exists |
+| ⚛ Rollback | Seat conflict at step 7 on a sandbox copy | Banner: rolled back, 0 double bookings, 0 orphaned bags, state identical, retry committed |
+| ⚖ Naive AI | Revenue-first optimiser vs the same guards | Banner: 15 violations (PAX-001/002/003/004/006), AeroTurn plan committed |
+| ✅ Approve | The human controller approves the queue | Gate moves to C31, crew swap and retime applied |
+| 🔧 Release | Clock to inspection end; B2 then B1 engineer sign; departure release | MX-002 refusal, CRS signed, EK813 released |
+| ↺ | Reset | Back to 14:50 |
+
+Panels:
+- Connection network map (status per destination)
+- EK813 critical-path timeline (now / STD / EOBT)
+- Crew FDP legality: inbound crew per stand, standby captains
+- Recovery flow, from missed connection to new flight, coloured by priority tier
+- Priority queue in seat-allocation order
+- Compensation & care, legacy vs AeroTurn
+- Live event feed, rebuilt from the audit log after a reload
+- Controller queue with Approve / Reject
+- Guard interventions
+
+Detail tabs cover passengers, crew & duty, turnaround & MX, cost & network, and the audit log with the data sources.
+
+![dashboard, lower half](docs/img/dashboard_bottom.png)
 
 See [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for the presentation run-sheet and [docs/PITCH.md](docs/PITCH.md)
 for the pitch and judge Q&A.
