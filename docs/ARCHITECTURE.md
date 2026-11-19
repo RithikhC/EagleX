@@ -9,8 +9,26 @@ AeroTurnAgent.run()
  │    └─ tools.dispatch(name, args)     schema check → audit → tool → guards → state
  ├─ missing_steps()                     checks DB state, not what the model claims
  ├─ autopilot (code) for any missing    clearly labelled in the trace
+ ├─ reconcile.reconcile()               continuous re-validation (also after every world event)
  └─ narrative.executive_brief()         LLM prose + numeric grounding check
 ```
+
+### Continuous re-validation (`reconcile.py`)
+
+```
+for each PENDING change (crew swaps first, so a retime is judged with the staged crew):
+    past valid_until?                 → EXPIRED
+    guards fail with fresh facts?     → WITHDRAWN (reason = rules), never left for the controller
+    legal but facts moved?            → WITHDRAWN as superseded + re-staged with fresh numbers
+no live stand change?                 → best legal stand whose decision window is open, else ESCALATION
+no fit captain and no pending swap?   → next legal standby captain, else ESCALATION (flight stays grounded)
+approved ETD earlier than the CPM?    → RETIME at the critical-path EOBT
+connections at risk?                  → short holds that pay off (per-passenger hold length, AED 1,000 margin)
+                                      → plan + atomic rebook of the rest
+                                      → passengers with no legal seat today: ESCALATION with care protocol
+```
+
+Escalations are idempotent per (topic, reason) and recorded in the hash-chained audit log.
 
 ## 2. State machine of a network change
 
@@ -28,6 +46,7 @@ AeroTurnAgent.run()
                     BLOCKED_AT_APPROVAL         APPROVED → applied atomically
                     (stays PENDING)
                                      hitl.reject → REJECTED
+                    reconcile: no longer legal / superseded → WITHDRAWN
 ```
 
 ## 3. Atomic rebooking transaction

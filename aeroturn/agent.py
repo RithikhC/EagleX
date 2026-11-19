@@ -213,10 +213,22 @@ class AeroTurnAgent:
         if left:
             self.emit("autopilot", f"Code autopilot completing {len(left)} step(s) the brain did not finish", left)
             self._run_policy(only_missing=True)
+        self.revalidate()
         brief = narrative.executive_brief(self.conn, self.client)
         self.emit("brief", f"Executive brief ({brief['source']})", brief)
         audit.log(self.conn, "SYSTEM", "AGENT_RUN_END", {"brain": self.brain, "missing": self.missing_steps()})
         return {"ok": True, "brain": self.brain, "brief": brief, "trace": [e.as_dict() for e in self.trace]}
+
+    def revalidate(self) -> dict:
+        """Continuous re-validation: re-check every pending decision against fresh facts (see reconcile.py)."""
+        from . import reconcile
+        r = reconcile.reconcile(self.conn)
+        if r["events"] or r["escalations"]:
+            self.emit("system", f"Re-validation at {r['at'][-5:]}: {len(r['events'])} change(s), "
+                                f"{len(r['escalations'])} escalation(s)", r["events"])
+        for e in r["escalations"]:
+            self.emit("escalation", f"ESCALATED to humans: {e['topic']}. {e['reason']}", e)
+        return r
 
     # ------------------------------------------------------------------ LLM: plan-and-execute
     def _facts_digest(self) -> dict:
@@ -339,14 +351,17 @@ class AeroTurnAgent:
                                 "the CRS is signed: " + ", ".join(r["guard"]["rules_violated"]))
         objective = plan.get("rebooking_objective")
         objective = objective if objective in recovery.OBJECTIVES else "earliest_arrival"
-        self.emit("llm", f"Decision: rebooking objective '{objective}'. {plan.get('objective_why', '')}")
-        p = self.call("plan_passenger_recovery", {"objective": objective})
-        r = self.call("execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]})
-        if r.get("status") == "ROLLED_BACK":
-            self.emit("system", "Code: mid-way failure rolled back cleanly; re-planning on fresh inventory with the "
-                                "same objective")
+        if recovery.connection_risk(self.conn)["at_risk"] == 0:
+            self.emit("system", "No connection is at risk any more: nothing to rebook")
+        else:
+            self.emit("llm", f"Decision: rebooking objective '{objective}'. {plan.get('objective_why', '')}")
             p = self.call("plan_passenger_recovery", {"objective": objective})
-            self.call("execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]})
+            r = self.call("execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]})
+            if r.get("status") == "ROLLED_BACK":
+                self.emit("system", "Code: mid-way failure rolled back cleanly; re-planning on fresh inventory with "
+                                    "the same objective")
+                p = self.call("plan_passenger_recovery", {"objective": objective})
+                self.call("execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]})
         templates = {k: v for k, v in (plan.get("templates") or {}).items() if isinstance(v, str)}
         bad = {k: tools.validate_template(v) for k, v in templates.items()}
         bad = {k: v for k, v in bad.items() if v}
@@ -414,17 +429,27 @@ class AeroTurnAgent:
                 f"its captain and cannot leave before {ob['critical_path_eobt']} because the hydraulic inspection is "
                 f"on the critical path.")
         if wanted("gate reassignment"):
-            g = self.call("evaluate_gate_options")
+            from . import reconcile
+            rejected = reconcile.rejected_gates(self.conn)
+            g = self.call("evaluate_gate_options", {"exclude": rejected} if rejected else {})
             best = g["recommended"]
             blocked = [o for o in g["options"] if not o["legal"]]
-            say(f"Gate options: {', '.join(o['gate'] + ' ' + o['verdict'] for o in g['options'])}. "
-                + (f"{blocked[0]['gate']} is illegal (crew FDP). " if blocked else "")
-                + f"{best} keeps the crew legal with the fewest misconnects. Staging it for the controller "
-                  f"(decision deadline {g['decision_deadline']}).")
-            self.call("stage_controller_schedule_change", {
-                "change_type": "GATE_REASSIGNMENT", "flight_no": "EK812", "details": {"new_gate": best},
-                "justification": f"{best}: crew lands legally, fewest misconnects; holding for the planned stand "
-                                 f"breaches inbound crew FDP."})
+            if best is None:
+                say(f"Gate options: {', '.join(o['gate'] + ' ' + o['verdict'] for o in g['options'])}. No stand keeps "
+                    f"the inbound crew legal, so there is nothing legal to stage. Escalating to humans.")
+                e = reconcile.no_stand_escalation(self.conn, g)
+                if not e.get("repeat"):
+                    self.emit("escalation", f"ESCALATED to humans: {e['topic']}. {e['reason']}", e)
+            else:
+                say(f"Gate options: {', '.join(o['gate'] + ' ' + o['verdict'] for o in g['options'])}. "
+                    + (f"{blocked[0]['gate']} is illegal (crew FDP). " if blocked else "")
+                    + (f"Controller rejected {', '.join(rejected)}. " if rejected else "")
+                    + f"{best} keeps the crew legal with the fewest misconnects. Staging it for the controller "
+                      f"(decision deadline {g['decision_deadline']}).")
+                self.call("stage_controller_schedule_change", {
+                    "change_type": "GATE_REASSIGNMENT", "flight_no": "EK812", "details": {"new_gate": best},
+                    "justification": f"{best}: crew lands legally, fewest misconnects; holding for the planned stand "
+                                     f"breaches inbound crew FDP."})
         if not only_missing:
             hd = self.call("evaluate_connection_holds")
             for rec in hd["recommended"]:
@@ -453,6 +478,11 @@ class AeroTurnAgent:
                                 "add_crew_id": sel["crew_id"], "role": "CPT"},
                     "justification": f"Rostered captain unfit (fatigue report). {sel['name']} is the nearest legal "
                                      f"captain, FDP margin {sel['margin']}."})
+            else:
+                from . import reconcile
+                e = reconcile.no_captain_escalation(self.conn, sc)
+                if not e.get("repeat"):
+                    self.emit("escalation", f"ESCALATED to humans: {e['topic']}. {e['reason']}", e)
         if wanted("RETIME") or wanted("propose_departure"):
             cpm = self.call("get_turnaround_critical_path", {"flight_no": "EK813"})
             if wanted("RETIME"):
@@ -468,7 +498,9 @@ class AeroTurnAgent:
                     say("Departure release correctly refused for now: "
                         + "; ".join(v["message"] for v in r["guard"]["violations"][:2])
                         + ". It can be re-proposed once the captain swap is approved and the engineer signs the CRS.")
-        if wanted("rebook"):
+        if wanted("rebook") and recovery.connection_risk(self.conn)["at_risk"] == 0:
+            say("No connection is at risk: nothing to rebook.")
+        elif wanted("rebook"):
             plan = self.call("plan_passenger_recovery", {"objective": "earliest_arrival"})
             say(f"Plan {plan['plan_id']}: {plan['summary']['rebooked']} passengers, "
                 f"{plan['summary']['vulnerable_rebooked']} vulnerable processed first, "

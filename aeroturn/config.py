@@ -32,5 +32,6 @@ EUR_TO_AED = 4.10                 # reference mid-market rate (27 Oct 2026); set
 DELAY_COST_AED_PER_MIN = 400      # tactical delay cost, wide-body aircraft (assumption, ~EUR 100)
 PAX_MINUTE_AED = 1.50             # value of one passenger-minute of delay for those on board (assumption)
 MAX_RECOMMENDED_HOLD_MIN = 15     # commercial policy for suggesting a connection hold (the safety cap is in guards)
+MIN_HOLD_NET_SAVING_AED = 1000    # a hold must beat re-accommodation by this margin: the delay estimate is uncertain
 MEAL_VOUCHER_AED = 100            # right-to-care meal voucher per passenger
 HOTEL_NIGHT_AED = 550             # overnight accommodation + transport per passenger

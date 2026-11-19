@@ -36,7 +36,7 @@ asleep, the first load takes about a minute.
 - Network cost, including the EK813 delay, the knock-on and the hold, falls from AED 206k to AED 121k.
 - All money is in UAE dirhams. EU261 amounts are fixed in EUR by law and converted at 1 EUR = 4.10 AED
   (`aeroturn/config.py`).
-- 60 automated tests pass.
+- 79 automated tests pass, including 13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
 
 ---
 
@@ -46,7 +46,7 @@ asleep, the first load takes about a minute.
 pip install -r requirements.txt
 streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
-python -m pytest -q           # 60 tests
+python -m pytest -q           # 79 tests
 ```
 
 ### Choose the brain (optional)
@@ -122,6 +122,7 @@ is shown to be identical before and after.
 | Vulnerable-passenger priority | `guards.pax_tier`, `_priority_inversions`, UMNR/MEDA/PRM rules; planner orders P1 → P4 | `test_priority.py` |
 | LLM cannot bypass | Sealed module (`GuardTamperError`), frozen dataclasses, `MappingProxyType`, SHA-256 pin, strict arg schemas, no override params | `test_guards.py::test_guards_cannot_be_mutated`, `test_agent.py` (fake LLM tries override, illegal crew, self-approval, fact-bearing templates) |
 | HITL for schedule / gate changes | `stage_controller_schedule_change` → `PENDING`; `hitl.approve()` is not in the tool registry, refuses non-human identities, re-runs the guards and enforces decision deadlines (gate 15:15, holds STD−5) | `test_hitl.py` (incl. hold approve, reject and expiry) |
+| Decisions stay legal as facts change | `reconcile.reconcile`: re-checks every pending change, withdraws what became illegal, stages the next legal option or escalates | `test_edge_cases.py` (13 cases) |
 
 ## Core and stretch goals
 
@@ -146,6 +147,53 @@ is shown to be identical before and after.
   - Gate decision deadline with expiry
   - Guard re-validation at approval
   - One-shot chaos injection, never reachable by the LLM
+
+## Edge cases: when the world moves after the plan
+
+A recovery plan is out of date the moment it is staged: a flight holds, a second captain reports fatigue, the
+inspection finds a leak, the controller says no. AeroTurn re-validates continuously (`aeroturn/reconcile.py`).
+It runs at the end of every agent run, after each world event, and on demand:
+
+1. Every pending decision is re-run through the guards with fresh facts.
+   - Expired decisions are marked EXPIRED.
+   - Illegal ones are **WITHDRAWN** by the agent; they never sit in the controller's queue.
+   - Still-legal ones whose facts moved, such as a new decision window, are re-staged with fresh numbers.
+2. A legal replacement is staged when one exists: the next legal stand, the next legal captain, or a new
+   critical-path ETD.
+3. Short connection holds are re-assessed, then broken connections are re-planned in one atomic transaction.
+4. Anything with no legal option is **escalated** to humans, with the reason and the options, and recorded in
+   the audit chain. The model never solves a problem by breaking a floor.
+
+`aeroturn/edge_cases.py` runs 13 cases. Each one uses a throw-away copy of the scenario, applies one
+perturbation, and checks the outcome with readable assertions. **13/13 pass, 67/67 checks**: 9 cases are
+resolved automatically and 4 are escalated to humans. Run them from the dashboard (🧪 Edge cases) or with
+`pytest tests/test_edge_cases.py`.
+
+| | The world changes | What AeroTurn does | Outcome |
+|---|---|---|---|
+| EC-01 | ATC holds EK812 +15 min after the plan | The 15:20 passenger plan is refused as stale. C31 is re-staged with the new 15:30 window (crew margin 5 min). Passengers are re-planned and committed | ✅ 45 rebooked; 1 with no legal seat today escalated |
+| EC-02 | ATC hold +25 min: every stand breaches inbound crew FDP | C31 is withdrawn (FTL-001). Nothing relies on commander's discretion. Escalated with options | 🟧 escalated |
+| EC-03 | The replacement captain reports fatigue | The controller's approval is blocked (FTL-004). The swap is withdrawn and the next legal captain is staged and approved | ✅ |
+| EC-04 | Both legal standby captains drop out | No illegal captain is proposed. Departure is blocked (FTL-005). Crew control gets every candidate's blocking rule | 🟧 escalated |
+| EC-05 | The last home-carrier seats for a UMNR and a MEDA passenger sell out | The child is never put on a partner, overnight or post-22:00 flight. The medical passenger is never put on an uncleared carrier. Both are escalated with their care protocol; the other 43 are rebooked | 🟧 escalated |
+| EC-06 | One economy and one business seat left on the 18:25 to Bangkok | The UMNR gets the economy seat. The wheelchair passenger gets a protection upgrade to business. The family of three moves together to 21:50 | ✅ |
+| EC-07 | The controller rejects C31 | C31 is never re-proposed; R205 is staged. After approval, the remote stand's +25 min MCT breaks more connections: AeroTurn proposes holding EK346 (last flight to Kuala Lumpur) for 3 min, which protects 10 passengers (AED 2,658 vs AED 31,100), and rebooks 6 more | ✅ |
+| EC-08 | Nobody decides in time | C31 expires at 15:15. R205 is offered while its window is open (to 15:18), then expires and is escalated. A late approval returns EXPIRED | 🟧 escalated |
+| EC-09 | The inspection finds a leak (+90 min) | The 17:15 retime is withdrawn (TURN-001) and re-staged at 18:45. C31 is withdrawn because the longer turn clashes with EK2350 at 18:45 (GATE-001); R205 is staged. The captain swap is re-checked and still legal | ✅ |
+| EC-10 | The agent runs twice | No duplicate proposals, bookings or notifications | ✅ |
+| EC-11 | The baggage system fails mid-commit | Rollback with an identical state fingerprint, then the retry commits all 45 passengers and their bags | ✅ |
+| EC-12 | A diversion takes C31 | C31 is withdrawn (GATE-001) and R205 staged before anyone can approve a clash | ✅ |
+| EC-13 | The controller rejects the EK418 hold | The 4 passengers waiting on it are rebooked at once; EK418 leaves on time | ✅ |
+
+**What the edge cases changed in the model:**
+- They found a cost bug. A passenger with no seat left today was costed at AED 0 in the hold analysis, so a
+  hold for the last flight of the day never looked worthwhile. Stranded passengers are now costed as an
+  overnight stay: hotel, meals and EU261.
+- Hold length is now chosen per passenger. A 3-minute hold can protect 10 of 11 passengers even when the
+  slowest would need 23 minutes. A hold must still save at least AED 1,000 net (`MIN_HOLD_NET_SAVING_AED`),
+  because the delay estimate itself is uncertain. The main scenario's numbers are unchanged.
+- The agent picks the best legal stand whose decision window is still open.
+- If no legal stand or captain exists, the agent escalates instead of staging nothing.
 
 ## The scenario (synthetic, reproducible, seed 812)
 
@@ -183,6 +231,8 @@ aeroturn/
   tools.py                 agent tools incl. the 3 required services; strict schemas; dispatcher
   hitl.py                  controller approval / rejection, engineer CRS, sim clock (NOT agent-callable)
   agent.py                 LLM loop + offline policy + completeness check + code autopilot
+  reconcile.py             continuous re-validation: withdraw, re-stage, re-plan or escalate
+  edge_cases.py            13 sandboxed what-if cases with readable checks
   llm.py                   Ollama / Groq / Gemini via OpenAI-compatible API (stdlib only)
   recovery.py              connection risk + priority-protected planner (+ unconstrained baseline)
   crew.py                  standby crew pairing matcher
@@ -194,7 +244,7 @@ aeroturn/
   faults.py · lab.py       chaos injection · sandboxed experiments
 data/                      pristine SQLite + JSON snapshot
 docs/                      DEMO_SCRIPT.md · PITCH.md · ARCHITECTURE.md
-tests/                     60 pytest tests
+tests/                     79 pytest tests
 ```
 
 ## Deploying the live demo (Streamlit Community Cloud, free)
@@ -239,6 +289,7 @@ and the panels update in place.
 | ⚖ Naive AI | Revenue-first optimiser vs the same guards | Banner: 15 violations (PAX-001/002/003/004/006), AeroTurn plan committed |
 | ✅ Approve | The human controller approves the queue | Gate moves to C31, crew swap and retime applied |
 | 🔧 Release | Clock to inspection end; B2 then B1 engineer sign; departure release | MX-002 refusal, CRS signed, EK813 released |
+| 🌍 What if… | Inject a world event into this session (ATC hold +15 / +25, standby captain fatigued, leak found, diversion takes C31), or press Re-validate now | Banner lists what was withdrawn, re-staged, re-planned or escalated; the queue, KPIs and guard board update |
 | ↺ | Reset | Back to 14:50 |
 
 Panels:
@@ -250,7 +301,9 @@ Panels:
 - Compensation & care, legacy vs AeroTurn
 - Live event feed, rebuilt from the audit log after a reload
 - Controller queue with Approve / Reject
-- Guard interventions
+- Guard interventions, withdrawals and escalations
+
+The 🧪 **Edge cases** tab runs the 13 cases above (one at a time or all at once), each with its timeline and its ✓/✕ checks. Your live session is not touched.
 
 Detail tabs cover passengers, crew & duty, turnaround & MX, cost & network, and the audit log with the data sources.
 

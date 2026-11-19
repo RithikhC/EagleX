@@ -47,9 +47,19 @@
 | Connection hold staged | EK418 SYD +8 min: AED 8,588 vs AED 10,240 to rebook 4 pax ~6h later |
 | Same-day arrivals | 45/45 (legacy 0/45) |
 | Unconstrained plan | blocked: 15 violations across PAX-001/002/003/004/006 |
-| Tests | 60 passing |
+| Edge cases (world changes after the plan) | 13/13 pass, 67/67 checks: 9 resolved automatically, 4 escalated |
+| Tests | 79 passing |
 
 ## Anticipated judge questions
+
+**"What happens when something changes after the agent has planned?"**
+Continuous re-validation. Every pending decision is re-run through the guards with fresh facts. Anything that
+became illegal is withdrawn by the agent itself, a legal replacement is staged, and if none exists it is
+escalated to a human with the reason and the options. Open the 🧪 Edge cases tab and press Run all: 13 cases
+(ATC holds, a second fatigue report, a leak found during the inspection, a diversion taking the stand, a
+controller saying no, nobody deciding in time) pass 67/67 checks. The cases also found a real bug in our own
+cost model: stranded passengers were costed at zero. That was fixed, and the hold length is now chosen per
+passenger.
 
 **"Where does your data come from? Is it real?"**
 The brief supplies no dataset and asks us to synthesise one. Ours is generated from a fixed seed, so it is byte-reproducible. The rules are real and sourced: EASA flight-time tables, CS FTL.1.225 standby, Part-66 licences, ICAO Annex 17 bag matching, EU261 and its case law. Every number we chose ourselves is listed as an assumption in docs/DATA_SOURCES.md.

@@ -199,21 +199,48 @@ def hold_analysis(conn: sqlite3.Connection) -> list[dict]:
     for fid, plist in by_flight.items():
         f = flights[fid]
         std = parse(f["std"])
-        need = max(max(minutes(std, plus(eibt, p["mct_min"])),
-                       minutes(std, plus(eibt, LIMITS.bag_mct_min)) if p["bags"] else 0) for p in plist)
-        hold_cost = int(round(need * (config.DELAY_COST_AED_PER_MIN + config.PAX_MINUTE_AED * f["load_pax"])))
-        rebook_cost = 0
+        rate = config.DELAY_COST_AED_PER_MIN + config.PAX_MINUTE_AED * f["load_pax"]
+        # per passenger: minutes of hold needed, and what it costs to re-accommodate them instead
+        each = []
         for p in plist:
+            need_p = max(minutes(std, plus(eibt, p["mct_min"])),
+                         minutes(std, plus(eibt, LIMITS.bag_mct_min)) if p["bags"] else 0)
             t = target.get(p["pax_id"])
             if t and t != fid:
-                rebook_cost += passenger_cost(conn, pax[p["pax_id"]], f, flights[t])["total"]
+                cost_p = passenger_cost(conn, pax[p["pax_id"]], f, flights[t])["total"]
+            elif not t:  # no legal seat today: stranded until the same flight tomorrow (hotel, meals, EU261)
+                cost_p = passenger_cost(conn, pax[p["pax_id"]], f, None, new_std=plus(std, 1440),
+                                        new_sta=plus(parse(f["sta"]), 1440))["total"]
+            else:
+                cost_p = 0
+            each.append((need_p, cost_p, p))
+        # choose the hold length with the best net saving: it may protect only the passengers who need a few
+        # minutes (a 3-min hold can save 10 of 11 even when the slowest needs 23)
+        full = max(n for n, _, _ in each)
+        best = None
+        for h in sorted({n for n, _, _ in each}):
+            saved = [(c, p) for n, c, p in each if n <= h]
+            net = sum(c for c, _ in saved) - h * rate
+            ok = h <= min(LIMITS.max_connection_hold_min, config.MAX_RECOMMENDED_HOLD_MIN)
+            if ok and net >= config.MIN_HOLD_NET_SAVING_AED and (best is None or net > best[0]):
+                best = (net, h, saved)
+        if best is None:
+            need, saved = full, [(c, p) for _, c, p in each]
+        else:
+            _, need, saved = best
+        hold_cost = int(round(need * rate))
+        rebook_cost = sum(c for c, _ in saved)
+        protected = [p for _, p in saved]
         if fid in frozen:
             need, hold_cost, rebook_cost = frozen[fid]["hold_min"], frozen[fid]["hold_cost"], frozen[fid]["rebook_cost"]
+            protected = [p for n, _, p in each if n <= need]
         allowed = need <= LIMITS.max_connection_hold_min
-        recommended = allowed and need <= config.MAX_RECOMMENDED_HOLD_MIN and hold_cost < rebook_cost
+        recommended = (allowed and need <= config.MAX_RECOMMENDED_HOLD_MIN
+                       and rebook_cost - hold_cost >= config.MIN_HOLD_NET_SAVING_AED)
         out.append({
             "flight": f["flight_no"], "flight_id": fid, "dest": f["dest"], "std": hm(std),
-            "pax_protected": len(plist), "vulnerable_protected": sum(1 for p in plist if p["vulnerable"]),
+            "pax_at_risk": len(plist), "hold_for_all_min": full,
+            "pax_protected": len(protected), "vulnerable_protected": sum(1 for p in protected if p["vulnerable"]),
             "hold_needed_min": need, "allowed": allowed, "hold_cost": hold_cost, "rebook_cost": rebook_cost,
             "net_saving": rebook_cost - hold_cost, "recommended": recommended,
             "onboard_pax_delayed": f["load_pax"], "hold_status": holds.get(fid, "-"),

@@ -136,7 +136,7 @@ def list_disrupted_passengers(conn: sqlite3.Connection, only_at_risk: bool = Tru
     }
 
 
-def evaluate_gate_options(conn: sqlite3.Connection) -> dict:
+def evaluate_gate_options(conn: sqlite3.Connection, exclude: list[str] | None = None) -> dict:
     """Compare arrival-gate options for EK-812: crew legality, gate availability, misconnects."""
     inb = _inbound(conn)
     landing = parse(inb["eta"])
@@ -169,7 +169,7 @@ def evaluate_gate_options(conn: sqlite3.Connection) -> dict:
             "violations": [v.as_dict() for v in violations[:3]] + (
                 [{"rule": "FTL-001", "message": f"... {len(violations) - 3} more crew members"}] if len(violations) > 3 else []),
         })
-    legal = [o for o in options if o["legal"]]
+    legal = [o for o in options if o["legal"] and o["gate"] not in set(exclude or ())]
     best = min(legal, key=lambda o: (o["misconnects"], o["hold_for_stand_min"])) if legal else None
     return {
         "current_gate": inb["gate_id"], "options": options,
@@ -452,6 +452,9 @@ def execute_atomic_passenger_rebook(conn: sqlite3.Connection, plan_id: str | Non
         basis = None
     else:
         raise ToolError("provide plan_id or assignments")
+    if not items:
+        _set_plan_status(conn, plan_id, "EXECUTED")
+        return {"status": "NOOP", "plan_id": plan_id, "message": "No passengers need rebooking."}
 
     eibt = parse(_inbound(conn)["eibt"])
     gate = db.one(conn, "SELECT g.* FROM gates g JOIN flights f ON f.gate_id = g.gate_id WHERE f.flight_id = ?",
@@ -746,7 +749,8 @@ TOOLS: dict[str, dict] = {
         "fn": evaluate_gate_options,
         "description": "Compare arrival gate options for EK812 (crew FDP at on-blocks, stand availability, "
                        "misconnects) and get the recommended legal gate.",
-        "parameters": _schema({}),
+        "parameters": _schema({"exclude": {"type": "array", "items": {"type": "string"},
+                                           "description": "stands the controller already rejected"}}),
     },
     "evaluate_connection_holds": {
         "fn": evaluate_connection_holds,

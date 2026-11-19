@@ -112,6 +112,28 @@ def reject(conn: sqlite3.Connection, change_id: str, who: ControllerIdentity, no
     return {"status": "REJECTED", "change_id": change_id}
 
 
+def withdraw(conn: sqlite3.Connection, change_id: str, reason: str, actor: str = "AGENT") -> dict:
+    """The proposer retracts its own pending proposal (e.g. it became illegal). Never touches approved changes."""
+    ch = db.one(conn, "SELECT * FROM schedule_changes WHERE change_id = ?", (change_id,))
+    if not ch or ch["status"] != "PENDING":
+        return {"status": ch["status"] if ch else "UNKNOWN", "change_id": change_id}
+    conn.execute("UPDATE schedule_changes SET status = 'WITHDRAWN', decided_by = ?, decided_at = ?, decision_note = ? "
+                 "WHERE change_id = ?", (actor, fmt(db.now(conn)), reason[:300], change_id))
+    audit.log(conn, actor, f"WITHDRAWN {ch['change_type']}", {"change_id": change_id, "reason": reason[:300]})
+    return {"status": "WITHDRAWN", "change_id": change_id, "change_type": ch["change_type"]}
+
+
+def expire(conn: sqlite3.Connection, change_id: str) -> dict:
+    """A decision window closed without a decision."""
+    ch = db.one(conn, "SELECT * FROM schedule_changes WHERE change_id = ?", (change_id,))
+    if not ch or ch["status"] != "PENDING":
+        return {"status": ch["status"] if ch else "UNKNOWN", "change_id": change_id}
+    conn.execute("UPDATE schedule_changes SET status = 'EXPIRED', decided_at = ? WHERE change_id = ?",
+                 (fmt(db.now(conn)), change_id))
+    audit.log(conn, "SYSTEM", f"EXPIRED {ch['change_type']}", {"change_id": change_id})
+    return {"status": "EXPIRED", "change_id": change_id, "change_type": ch["change_type"]}
+
+
 def _apply(conn, change_type: str, flight: dict, details: dict, derived: dict) -> None:
     fid = flight["flight_id"]
     if change_type == "GATE_REASSIGNMENT":

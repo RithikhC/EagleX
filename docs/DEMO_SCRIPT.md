@@ -13,7 +13,7 @@
 5. Backup if the browser dies: `python run_demo.py` in a terminal.
 
 The scenario bar, left to right:
-**▶ Run recovery agent · Chaos · ⛔ Duty breach · ⛔ No CRS · ⛔ Override · ⚛ Rollback · ⚖ Naive AI · ✅ Approve · 🔧 Release · ↺**
+**▶ Run recovery agent · Chaos · ⛔ Duty breach · ⛔ No CRS · ⛔ Override · ⚛ Rollback · ⚖ Naive AI · ✅ Approve · 🔧 Release · 🌍 What if… · ↺**
 
 ---
 
@@ -76,6 +76,17 @@ In the **Operations Controller queue**, press **Approve** on GATE_REASSIGNMENT (
 > "Approval re-runs the guards with fresh facts, and decisions expire: wait past 15:15 and the gate change
 > is dead, because the crew would be illegal by then. The agent has no way to approve anything."
 
+### Optional · 🌍 What if… (30 s, if a judge asks "what if things change?")
+
+After the agent run, open **🌍 What if…** and click **Medical diversion takes stand C31**.
+
+> "Stand C31 just went to a diversion. AeroTurn withdrew its own C31 proposal (GATE-001) and staged R205
+> before anyone could approve a clash."
+
+For the full catalogue, open the **🧪 Edge cases** tab and press **▶ Run all 13** (about 20 s): 13/13, 67/67
+checks, 9 resolved automatically, 4 escalated to humans. Open the EC-07 timeline to show the 3-minute EK346 hold
+that protects 10 passengers.
+
 ## 4:45 · 🔧 Release (40 s)
 
 The banner shows, in order:
@@ -104,3 +115,4 @@ Point at **Compensation & care**: legacy AED 133k against AeroTurn AED 50k, with
 | Clicked out of order | **↺** resets instantly |
 | Gate approval says EXPIRED | The clock passed 15:15 (🔧 Release moves it to 16:30). Press ↺ and approve the gate before releasing |
 | Browser dies | `python run_demo.py` |
+| You injected a world event by mistake | **↺** resets; edge cases never touch the live session |

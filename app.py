@@ -17,8 +17,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from aeroturn import (agent, audit, config, costs, crew, db, faults, guards, hitl, lab, llm, narrative, recovery,
-                      tools, turnaround)
+from aeroturn import (agent, audit, config, costs, crew, db, edge_cases, faults, guards, hitl, lab, llm, narrative,
+                      reconcile, recovery, tools, turnaround)
 from aeroturn.facts import pax_facts
 from aeroturn.timeutil import dur, hm, minutes, parse
 
@@ -74,6 +74,14 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{background:{SURFACE}; border-c
 .qcard .t {{font-weight:800; color:{INK}; font-size:.86rem;}}
 .qcard .d {{color:{INK2}; font-size:.78rem;}}
 .small {{font-size:.78rem; color:{INK2};}}
+.ec .h {{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}}
+.ec .id {{font-family:ui-monospace,Consolas,monospace; font-size:.74rem; font-weight:800; color:{MUTED};}}
+.ec .t {{font-weight:800; color:{INK}; font-size:.98rem; margin:2px 0 4px 0;}}
+.ec .p {{color:{INK2}; font-size:.82rem;}}
+.ec .w {{color:{MUTED}; font-size:.78rem; margin-top:4px;}}
+.ec .o {{color:{INK}; font-size:.84rem; margin-top:6px; font-weight:600;}}
+.ck {{font-size:.8rem; color:{INK2}; margin:2px 0;}}
+.ck b {{display:inline-block; width:15px; text-align:center; margin-right:6px;}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -155,8 +163,9 @@ def snapshot(db_path: str, version: str) -> dict:
             "pnr": {pid: p["pnr"] for pid, p in prow.items()},
             "pending": hitl.pending(c),
             "history": hitl.history(c),
-            "guard_log": db.rows(c, "SELECT seq, sim_time, action, detail FROM audit_log WHERE actor = 'GUARD' "
-                                    "AND (action LIKE '%BLOCK%' OR action LIKE '%REFUSED%') ORDER BY seq DESC LIMIT 8"),
+            "guard_log": db.rows(c, "SELECT seq, sim_time, actor, action, detail FROM audit_log WHERE (actor = 'GUARD' "
+                                    "AND (action LIKE '%BLOCK%' OR action LIKE '%REFUSED%')) OR action LIKE 'WITHDRAWN%' "
+                                    "OR action = 'ESCALATION' ORDER BY seq DESC LIMIT 10"),
             "txns": db.rows(c, "SELECT * FROM txn_log ORDER BY started_at DESC"),
             "chain": audit.verify_chain(c),
             "clock": db.now(c),
@@ -325,6 +334,24 @@ def sc_rebook_remaining():
     if r.get("status") == "COMMITTED":
         tools.dispatch(c, "send_passenger_notifications", {"templates": narrative.DEFAULT_TEMPLATES}, actor="OCC_UI")
     push_incident("good" if r.get("status") == "COMMITTED" else "warn", f"Rebook remaining passengers: {r.get('status')}")
+
+
+def _reconcile_incident(title: str) -> None:
+    r = reconcile.reconcile(conn())
+    lines = [f"Re-validation: {e}" for e in r["events"]] + [f"ESCALATED · {e['topic']}: {e['reason']}"
+                                                            for e in r["escalations"]]
+    level = "serious" if r["escalations"] else ("warn" if r["events"] else "good")
+    push_incident(level, title, lines[:7] or ["Every pending decision re-checked with fresh facts: still legal."],
+                  (["ESCALATION"] if r["escalations"] else []) + (["RE-VALIDATE"] if r["events"] else []))
+
+
+def sc_revalidate():
+    _reconcile_incident("Re-validation: every pending decision re-checked against fresh facts")
+
+
+def sc_world(key: str):
+    label = edge_cases.inject(conn(), key)
+    _reconcile_incident(f"World event: {label}. AeroTurn re-validated")
 
 
 def sc_reset():
@@ -567,7 +594,8 @@ def event_html(kind: str, title: str) -> str:
     cmap = {"llm": ("#9085e9", "LLM"), "policy": (MUTED, "POLICY"), "tool_call": (S1, "TOOL"),
             "guard_block": (CRIT, "GUARD ✕"), "hitl": (WARN, "HITL ◆"), "txn_commit": (GOOD, "COMMIT ✓"),
             "txn_rollback": (SERIOUS, "ROLLBACK ▲"), "autopilot": (MUTED, "AUTOPILOT"), "system": (S1, "SYSTEM"),
-            "error": (CRIT, "ERROR"), "brief": ("#9085e9", "BRIEF")}
+            "error": (CRIT, "ERROR"), "brief": ("#9085e9", "BRIEF"), "escalation": (SERIOUS, "ESCALATED ▲"),
+            "world": (S1, "WORLD")}
     col, tag = cmap.get(kind, (AXIS, kind.upper()))
     return f"<div class='ev' style='border-left-color:{col}'><span class='k'>{tag}</span>{html.escape(str(title))}</div>"
 
@@ -603,8 +631,16 @@ def audit_events(rows: list[dict]) -> list[tuple[str, str]]:
             out.append(("system", f"Agent run started · {d.get('brain', '')}"))
         elif action == "EXECUTIVE_BRIEF":
             out.append(("brief", f"Executive brief by {d.get('source', '')}"))
+        elif actor == "SIMULATION" and action == "PERTURBATION":
+            out.append(("world", f"World event: {d.get('event', '')}"))
         elif actor == "SIMULATION":
             out.append(("system", f"Clock {d.get('from', '')} → {d.get('to', '')}"))
+        elif action == "ESCALATION":
+            out.append(("escalation", f"{d.get('topic', '')}: {d.get('reason', '')}"))
+        elif action.startswith("WITHDRAWN"):
+            out.append(("guard_block", f"{action} {d.get('change_id', '')}: {d.get('reason', '')}"))
+        elif action.startswith("EXPIRED"):
+            out.append(("hitl", f"{action} {d.get('change_id', '')}: decision window closed"))
     return out
 
 
@@ -653,8 +689,8 @@ st.markdown(
     f"<span class='badge'><i>⛓</i>audit {'intact' if SNAP['chain']['ok'] else 'BROKEN'} · {SNAP['chain']['entries']}</span>"
     f"</div></div>", unsafe_allow_html=True)
 
-tabs = st.tabs(["📊 Operations", "👥 Passengers", "🧑‍✈️ Crew & duty", "🔧 Turnaround & MX", "💶 Cost & network",
-                "📜 Audit & data"], key="main_tabs", on_change="rerun")
+tabs = st.tabs(["📊 Operations", "🧪 Edge cases", "👥 Passengers", "🧑‍✈️ Crew & duty", "🔧 Turnaround & MX",
+                "💶 Cost & network", "📜 Audit & data"], key="main_tabs", on_change="rerun")
 
 # ===========================================================================
 # OPERATIONS DASHBOARD
@@ -663,7 +699,7 @@ with tabs[0]:
     if tabs[0].open:
         # ---- scenario bar
         with st.container(border=True):
-            b = st.columns([1.55, 1.0, 1.0, 0.85, 0.9, 0.9, 0.95, 0.9, 0.9, 0.5], gap="small",
+            b = st.columns([1.45, 0.8, 0.95, 0.8, 0.85, 0.85, 0.9, 0.85, 0.85, 0.95, 0.45], gap="small",
                            vertical_alignment="center")
             go_run = b[0].button("▶ Run recovery agent", type="primary", width="stretch")
             inject = b[1].toggle("Chaos", value=True, help="Inject a mid-way seat conflict at rebooking step 7")
@@ -681,7 +717,15 @@ with tabs[0]:
                         help="Operations Controller approves every pending change")
             b[8].button("🔧 Release", on_click=sc_crs_release, width="stretch",
                         help="Clock to inspection end, B2 then B1 engineer sign the CRS, release EK813")
-            b[9].button("↺", on_click=sc_reset, width="stretch", help="Reset scenario")
+            with b[9].popover("🌍 What if…", width="stretch", help="Inject a world event, then AeroTurn re-validates"):
+                st.markdown("<div class='small'>The world moves after the plan. Inject an event into this session; "
+                            "AeroTurn re-checks every pending decision, withdraws what became illegal, stages a legal "
+                            "replacement or escalates.</div>", unsafe_allow_html=True)
+                for key_, (label_, _) in edge_cases.WORLD_EVENTS.items():
+                    st.button(label_, key=f"we_{key_}", on_click=sc_world, args=(key_,), width="stretch")
+                st.button("🔄 Re-validate now", key="we_revalidate", on_click=sc_revalidate, type="primary",
+                          width="stretch")
+            b[10].button("↺", on_click=sc_reset, width="stretch", help="Reset scenario")
         holder = st.container()
         if go_run:
             run_agent(holder, inject)
@@ -830,11 +874,23 @@ with tabs[0]:
             if risk["at_risk"] and SNAP["rebook_order"]:
                 st.button(f"Rebook {risk['at_risk']} remaining", on_click=sc_rebook_remaining, width="stretch")
         with c3.container(border=True, height=430):
-            st.markdown("<div class='sec'>Guard interventions</div>", unsafe_allow_html=True)
+            st.markdown("<div class='sec'>Guard interventions · withdrawals · escalations</div>", unsafe_allow_html=True)
             if not SNAP["guard_log"]:
                 st.markdown("<div class='small'>No blocks yet.</div>", unsafe_allow_html=True)
             for gl in SNAP["guard_log"]:
                 d = json.loads(gl["detail"] or "{}")
+                if gl["action"] == "ESCALATION":
+                    st.markdown(f"<div class='qcard' style='border-color:{SERIOUS}'><div class='t'>"
+                                f"{status_html('serious', 'ESCALATED')} {html.escape(d.get('topic', ''))}</div>"
+                                f"<div class='d'>{html.escape(d.get('reason', '')[:180])} · {hm(gl['sim_time'])}</div>"
+                                + "".join(f"<div class='d'>→ {html.escape(o_[:120])}</div>" for o_ in d.get("options", [])[:2])
+                                + "</div>", unsafe_allow_html=True)
+                    continue
+                if gl["action"].startswith("WITHDRAWN"):
+                    st.markdown(f"<div class='qcard'><div class='t'>{status_html('warn', gl['action'])}</div>"
+                                f"<div class='d'>{html.escape(d.get('change_id', ''))} · {html.escape(d.get('reason', ''))}"
+                                f" · {hm(gl['sim_time'])}</div></div>", unsafe_allow_html=True)
+                    continue
                 rules = d.get("rules") or []
                 st.markdown(f"<div class='qcard'><div class='t'>{status_html('crit', gl['action'])}</div>"
                             f"<div class='d'>{html.escape(str(d.get('flight') or d.get('item') or d.get('plan_id') or ''))}"
@@ -849,10 +905,87 @@ with tabs[0]:
                                 unsafe_allow_html=True)
 
 # ===========================================================================
-# PASSENGERS
+# EDGE CASES
 # ===========================================================================
+WHO = {"WORLD": ("world", "WORLD"), "AEROTURN": ("system", "AEROTURN"), "GUARD": ("guard_block", "GUARD"),
+       "HUMAN": ("hitl", "HUMAN"), "ESCALATION": ("escalation", "ESCALATED")}
+LEVEL = {"resolved": ("good", "RESOLVED"), "escalated": ("serious", "ESCALATED"), "failed": ("crit", "FAILED")}
+
+
+def cb_edge(case_id: str):
+    ss.setdefault("edge", {})[case_id] = edge_cases.run_case(case_id)
+
+
+def edge_step_html(stp: dict) -> str:
+    kind, tag = WHO.get(stp["who"], ("system", stp["who"]))
+    col = {"world": S1, "system": S3, "guard_block": CRIT, "hitl": WARN, "escalation": SERIOUS}[kind]
+    clk = f"<span class='small' style='margin-right:6px'>{stp['clock']}</span>" if stp.get("clock") else ""
+    return (f"<div class='ev' style='border-left-color:{col}'><span class='k' style='color:{col}'>{tag}</span>{clk}"
+            f"{html.escape(stp['text'])}</div>")
+
+
 with tabs[1]:
     if tabs[1].open:
+        ss.setdefault("edge", {})
+        res_ = ss["edge"]
+        with st.container(border=True):
+            h1, h2 = st.columns([3.2, 1], vertical_alignment="center")
+            h1.markdown(f"<div class='sec'>{len(edge_cases.CASES)} edge cases · the world moves after the agent has "
+                        f"planned</div><div class='small'>Each case copies the scenario into a throw-away sandbox, applies "
+                        f"one perturbation, lets AeroTurn respond with the same guarded tools, continuous re-validation "
+                        f"and controller workflow as the live console, then checks the outcome. Deterministic policy, so "
+                        f"every run gives the same answer; the guards are identical whichever brain proposes. Your live "
+                        f"session is not touched (use 🌍 What if… on the Operations tab for that).</div>",
+                        unsafe_allow_html=True)
+            run_all = h2.button(f"▶ Run all {len(edge_cases.CASES)}", type="primary", width="stretch")
+        if run_all:
+            bar = st.progress(0.0, text="Running edge cases…")
+            for i_, case_ in enumerate(edge_cases.CASES):
+                bar.progress(i_ / len(edge_cases.CASES), text=f"{case_.id} · {case_.title}")
+                res_[case_.id] = edge_cases.run_case(case_.id)
+            bar.empty()
+        if res_:
+            done = list(res_.values())
+            kk = st.columns(4, gap="small")
+            npass = sum(r_["passed"] for r_ in done)
+            kpi(kk[0], "Cases passed", f"{npass}/{len(done)}", f"of {len(edge_cases.CASES)} in the catalogue",
+                "good" if npass == len(done) else "crit", "PASS" if npass == len(done) else "FAIL")
+            kpi(kk[1], "Resolved automatically", str(sum(r_["level"] == "resolved" for r_ in done)),
+                "legal replacement staged or committed", "good", "AUTO")
+            kpi(kk[2], "Escalated to humans", str(sum(r_["level"] == "escalated" for r_ in done)),
+                "no legal option: never solved by breaking a floor", "serious", "HUMAN")
+            nchk = sum(len(r_["checks"]) for r_ in done)
+            kpi(kk[3], "Checks", f"{sum(c_['passed'] for r_ in done for c_ in r_['checks'])}/{nchk}",
+                f"{sum(r_['ms'] for r_ in done) / 1000:.1f} s total", "good" if npass == len(done) else "crit", "CHECKED")
+            st.write("")
+        cols_ = st.columns(3, gap="small")
+        for i_, case_ in enumerate(edge_cases.CASES):
+            r_ = res_.get(case_.id)
+            with cols_[i_ % 3].container(border=True):
+                badge = status_html(*LEVEL[r_["level"]]) if r_ else "<span class='small'>not run</span>"
+                st.markdown(f"<div class='ec'><div class='h'><span class='id'>{case_.id} · "
+                            f"{html.escape(case_.category.upper())}</span>{badge}</div>"
+                            f"<div class='t'>{html.escape(case_.title)}</div>"
+                            f"<div class='p'>{html.escape(case_.perturbation)}</div>"
+                            f"<div class='w'>Naive failure: {html.escape(case_.risk)}</div>"
+                            + (f"<div class='o'>{html.escape(r_['outcome'])}</div>" if r_ else "")
+                            + "</div>", unsafe_allow_html=True)
+                if r_:
+                    st.markdown("".join(f"<div class='ck'><b style='color:{GOOD if c_['passed'] else CRIT}'>"
+                                        f"{'✓' if c_['passed'] else '✕'}</b>{html.escape(c_['label'])}"
+                                        + (f" <span class='small'>({html.escape(str(c_['detail']))})</span>"
+                                           if c_["detail"] else "") + "</div>" for c_ in r_["checks"]),
+                                unsafe_allow_html=True)
+                    with st.expander(f"Timeline · {len(r_['steps'])} steps · {r_['ms']} ms"):
+                        st.markdown("".join(edge_step_html(x_) for x_ in r_["steps"]), unsafe_allow_html=True)
+                st.button("Run again" if r_ else "▶ Run", key=f"ec_{case_.id}", on_click=cb_edge, args=(case_.id,),
+                          width="stretch")
+
+# ===========================================================================
+# PASSENGERS
+# ===========================================================================
+with tabs[2]:
+    if tabs[2].open:
         only = st.toggle("Only disrupted passengers", value=True)
         base = {p["pax_id"]: p for p in SNAP["orig"]["passengers"]}
         rows = []
@@ -874,8 +1007,8 @@ with tabs[1]:
 # ===========================================================================
 # CREW & DUTY
 # ===========================================================================
-with tabs[2]:
-    if tabs[2].open:
+with tabs[3]:
+    if tabs[3].open:
         sc = SNAP["crew"]
         st.markdown(f"<div class='sec'>Standby captain matcher · {html.escape(sc['summary'])}</div>",
                     unsafe_allow_html=True)
@@ -911,8 +1044,8 @@ with tabs[2]:
 # ===========================================================================
 # TURNAROUND & MX
 # ===========================================================================
-with tabs[3]:
-    if tabs[3].open:
+with tabs[4]:
+    if tabs[4].open:
         st.plotly_chart(gantt(), config=PLOT_CFG, theme=None, key="gantt2")
         st.dataframe(pd.DataFrame([{"Task": t["task_id"], "Name": t["name"], "Start": t["start_hm"], "End": t["end_hm"],
                                     "Min": t["duration_min"], "Slack": t["slack_min"],
@@ -936,14 +1069,16 @@ with tabs[3]:
 # ===========================================================================
 # COST & NETWORK
 # ===========================================================================
-with tabs[4]:
-    if tabs[4].open:
+with tabs[5]:
+    if tabs[5].open:
         cst = SNAP["cost"]
         st.plotly_chart(cost_chart(), config=PLOT_CFG, theme=None, key="cost2")
         st.markdown("<div class='sec'>Hold a departing connection, or rebook its passengers?</div>",
                     unsafe_allow_html=True)
-        st.dataframe(pd.DataFrame([{"Flight": h["flight"], "Dest": h["dest"], "STD": h["std"], "Pax": h["pax_protected"],
-                                    "Hold needed": f"{h['hold_needed_min']} min",
+        st.dataframe(pd.DataFrame([{"Flight": h["flight"], "Dest": h["dest"], "STD": h["std"],
+                                    "Pax protected": f"{h['pax_protected']}/{h['pax_at_risk']}",
+                                    "Hold": f"{h['hold_needed_min']} min",
+                                    "Hold for all": f"{h['hold_for_all_min']} min",
                                     "Cap ≤30": "ok" if h["allowed"] else "NET-001",
                                     "Hold cost": f"AED {h['hold_cost']:,}", "Rebook cost": f"AED {h['rebook_cost']:,}",
                                     "Net saving": f"AED {h['net_saving']:,}",
@@ -952,15 +1087,18 @@ with tabs[4]:
         st.markdown(f"<div class='sec'>Per passenger, AED (EU261 whole-journey from Larnaca · {cst['fx_note']})</div>",
                     unsafe_allow_html=True)
         st.caption(f"Hold cost = minutes × (AED {config.DELAY_COST_AED_PER_MIN} aircraft + AED {config.PAX_MINUTE_AED:.2f} × "
-                   f"passengers on board). Meal voucher AED {config.MEAL_VOUCHER_AED}, hotel AED "
-                   f"{config.HOTEL_NIGHT_AED}. Assumptions, editable in aeroturn/config.py.")
+                   f"passengers on board). The hold length is chosen per passenger: a short hold may protect most of "
+                   f"them even when the slowest would need too long. A hold must save at least AED "
+                   f"{config.MIN_HOLD_NET_SAVING_AED:,} net. Passengers with no seat today are costed as stranded until "
+                   f"tomorrow. Meal voucher AED {config.MEAL_VOUCHER_AED}, hotel AED {config.HOTEL_NIGHT_AED}. "
+                   f"Assumptions, editable in aeroturn/config.py.")
         st.dataframe(pd.DataFrame(cst["per_passenger"]), hide_index=True, height=360)
 
 # ===========================================================================
 # AUDIT & DATA
 # ===========================================================================
-with tabs[5]:
-    if tabs[5].open:
+with tabs[6]:
+    if tabs[6].open:
         ch_ = SNAP["chain"]
         q = st.columns([3, 1])
         q[0].markdown(f"Hash chain **{'intact' if ch_['ok'] else 'BROKEN at ' + str(ch_.get('broken_at_seq'))}** · "
