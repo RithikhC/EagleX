@@ -8,6 +8,12 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
+**🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script](docs/PITCH_ROUND3.md).**
+The journey starts from a real delay alert, checked in code. The 🚦 *Pilot console* tab runs 12 inbox requests back
+to back, with a forced model timeout recovered by the backup model. It also triggers the three safety cases on
+demand (safe auto-action, risky action paused with a safe default, blocked attack), shows the hash-chained audit
+lines, and measures tokens, latency and cost.
+
 **Round 1 submission (TechX Dubai'26 template, 8 slides): [PDF](docs/EagleX_Round1_Submission.pdf) · [PowerPoint](docs/EagleX_Round1_Submission.pptx)**, built with screenshots from the live demo.
 
 **Demo video (subtitled, no voice-over): [docs/demo/AeroTurn_demo.mp4](docs/demo/AeroTurn_demo.mp4)** ([subtitles](docs/demo/AeroTurn_demo.srt)), recorded on the live demo.
@@ -52,7 +58,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
   (`aeroturn/config.py`).
 - 46 of the 48 bags travel with their owners; the 2 Karachi bags that cannot make the 16:35 (42 min, bag minimum
   45) follow on EK606 17:45 with a delivery note, written in the same transaction as their owners' seats.
-- 103 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
+- 116 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
   13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
 
 ---
@@ -63,7 +69,8 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 pip install -r requirements.txt
 streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
-python -m pytest -q           # 103 tests
+python -m pytest -q           # 116 tests
+python scripts/round3_evidence.py   # Round 3: re-measure tokens, latency, cost; export log evidence
 ```
 
 ### Choose the brain (optional)
@@ -263,18 +270,20 @@ them with `python scripts/build_dataset.py`.
 ## Repository layout
 
 ```
-app.py                     Streamlit OCC dashboard (9 tabs: Operations, Curveballs, Edge cases, Guardrails,
-                           Passengers, Crew & duty, Turnaround & MX, Cost & network, Audit & data)
+app.py                     Streamlit OCC dashboard (10 tabs: Operations, Pilot console, Curveballs, Edge cases,
+                           Guardrails, Passengers, Crew & duty, Turnaround & MX, Cost & network, Audit & data)
 run_demo.py                terminal version of the demo (python run_demo.py --yes)
 requirements.txt           Python dependencies
-aeroturn/                  the agent package (23 modules)
+aeroturn/                  the agent package (25 modules)
   agent.py                 LLM planning loop + offline policy + completeness check + code autopilot
-  llm.py                   Groq / Ollama / Gemini via OpenAI-compatible API (stdlib only)
+  llm.py                   Groq / Ollama / Gemini via OpenAI-compatible API; timeouts, retries, backup model, metering
   tools.py                 13 agent tools incl. the 3 required services; read/propose/write classes; dispatcher
   guards.py · guards.sha256  IMMUTABLE safety rules (sealed module, SHA-256 pinned)
   sanitize.py              prompt-injection filter for untrusted free text (passenger remarks, crew messages)
   hitl.py                  controller approval / rejection, engineer CRS, sim clock (NOT agent-callable)
   reconcile.py             continuous re-validation: withdraw, re-stage, re-plan or escalate
+  alerts.py                Round 3 trigger: incoming delay alert, validated in code
+  inbox.py                 Round 3 burst: OCC request inbox, three safety cases, audit lines
   curveballs.py            the 5 organiser curveballs (U-4.1..U-4.5), each live test end to end
   edge_cases.py            13 sandboxed what-if cases with readable checks
   recovery.py              connection risk + priority-protected rebooking planner (+ unconstrained baseline)
@@ -286,7 +295,7 @@ aeroturn/                  the agent package (23 modules)
   dataset.py · facts.py    synthetic scenario generator (seed 812) · typed facts for the guards
   config.py · timeutil.py  commercial assumptions, paths · time helpers
   faults.py · lab.py       chaos injection · sandboxed experiments
-tests/                     103 pytest tests in 10 files (+ conftest.py)
+tests/                     116 pytest tests in 11 files (+ conftest.py)
 data/                      pristine SQLite scenario + JSON snapshot
 scripts/                   build_dataset.py · pin_guards.py · deck/ (capture screenshots, build decks and diagram, record the video)
 docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · PITCH_SCRIPT · SUBMISSION_FORM ·

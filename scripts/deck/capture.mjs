@@ -146,6 +146,35 @@ if (stage === "all" || stage === "main") {
   await shot("11_edge", ec);
 }
 
+// ---------------- Round 3: alert-triggered run, then the Pilot console (burst, three safety cases, audit trail, cost)
+if (stage === "pilot") {
+  await viewport(2300);
+  await send("Page.navigate", { url: APP }); await idle(90000, 2500);
+  await click("Hide guide"); await idle();
+  await press("Run recovery agent", "Recovery run complete", 420000);
+  await shot("20_alert_run");
+  await viewport(3400);
+  await click("Pilot console", { selector: "[role=tab]" }); await idle();
+  await click("Process 12 inbox requests");
+  await waitFor(() => evalJs(`document.body.innerText.includes('REQUESTS PROCESSED')`), 300000);
+  await idle(30000, 2500);
+  for (let k = 0; k < 3; k++) {
+    await evalJs(`(() => { const b = [...document.querySelectorAll('button')].filter(x => x.innerText.includes('Trigger this case'))[${k}];
+      if (b) { b.scrollIntoView({block: 'center'}); b.click(); } return !!b; })()`);
+    await idle(60000, 2000);
+  }
+  await click("Let deadline pass"); await idle(30000, 2000);
+  await sleep(1500);
+  const secs = await evalJs(`(() => { const R = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top + window.scrollY, r.width, r.height]; };
+    const out = {};
+    for (const [k, p] of [['burst', '1 · BURST'], ['cases', '2 · SAFETY'], ['audit', '3 · AUDIT'], ['cost', '4 · COST']]) {
+      const e = [...document.querySelectorAll('.sec')].find(x => x.innerText.toUpperCase().startsWith(p)); out[k] = e ? R(e) : null; }
+    const last = [...document.querySelectorAll('.ptab')].pop(); out.costEnd = last ? R(last) : null;
+    const smalls = [...document.querySelectorAll('.small')].filter(e => e.innerText.startsWith('Price used')); out.costNote = smalls.length ? R(smalls[0]) : null;
+    return out; })()`);
+  await shot("21_pilot", secs);
+}
+
 // ---------------- the organisers' curveballs (U-4.1..U-4.5), run live on the Curveballs tab
 if (stage === "all" || stage === "curveballs") {
   await viewport(1000);

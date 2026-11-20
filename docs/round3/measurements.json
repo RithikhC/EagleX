@@ -1,0 +1,66 @@
+{
+  "brain": "openai/gpt-oss-120b via groq",
+  "backups": [
+    "openai/gpt-oss-20b via groq"
+  ],
+  "price": {
+    "input_per_m_usd": 0.15,
+    "output_per_m_usd": 0.6,
+    "source": "GroqCloud list price for openai/gpt-oss-120b, Oct 2026"
+  },
+  "recovery_runs": [
+    {
+      "seconds": 34.6,
+      "alert": "ACCEPTED",
+      "model_calls": 3,
+      "input_tokens": 5188,
+      "output_tokens": 1426
+    },
+    {
+      "seconds": 60.0,
+      "alert": "ACCEPTED",
+      "model_calls": 3,
+      "input_tokens": 5249,
+      "output_tokens": 1578
+    },
+    {
+      "seconds": 20.2,
+      "alert": "ACCEPTED",
+      "model_calls": 3,
+      "input_tokens": 5229,
+      "output_tokens": 1514
+    }
+  ],
+  "recovery": {
+    "median_seconds": 34.6,
+    "mean_input_tokens": 5222,
+    "mean_output_tokens": 1506,
+    "cost_usd": 0.00169
+  },
+  "burst": {
+    "requests": 12,
+    "seconds": 17.9,
+    "decisions": {
+      "AUTO": 4,
+      "PAUSED": 3,
+      "BLOCKED": 4,
+      "REJECTED": 1,
+      "ERROR": 0
+    },
+    "median_request_seconds": 1.39,
+    "model_calls": 13,
+    "failed_calls_recovered": 3,
+    "mean_input_tokens": 401,
+    "mean_output_tokens": 50,
+    "cost_per_request_usd": 9e-05,
+    "median_model_latency_ms": 234.0
+  },
+  "pilot_month": {
+    "assumption_per_day": {
+      "recoveries": 30,
+      "inbox_requests": 500
+    },
+    "llm_cost_per_day_usd": 0.096,
+    "llm_cost_per_month_usd": 2.87
+  }
+}
