@@ -1,0 +1,107 @@
+1
+00:00:00,509 --> 00:00:05,529
+AeroTurn · Autonomous aircraft turnaround and disruption recovery agent · Team EagleX · TechX Dubai'26 · AI Agent Arena · Recorded on the live demo · aeroturn-eaglex.streamlit.app
+
+2
+00:00:05,529 --> 00:00:11,036
+EK812 lands at Dubai 75 minutes late · 45 connections break · the crew is 20 min from its duty limit · a hydraulic defect · a fatigued captain
+
+3
+00:00:11,036 --> 00:00:20,834
+One screen for the operations controller · A Start-here guide explains the four clicks to a first-time visitor
+
+4
+00:00:20,834 --> 00:00:24,664
+Step 1 · Run the AI recovery agent
+
+5
+00:00:24,664 --> 00:00:29,434
+The LLM (Groq gpt-oss-120b) reads the situation through read-only tools
+
+6
+00:00:29,434 --> 00:00:37,356
+It proposes a stand, a replacement captain, a new departure time and the rebooking
+
+7
+00:00:37,356 --> 00:00:42,870
+Done: 0 connections at risk · 10/10 vulnerable protected · AED 82,950 saved · 45 passengers and 48 bags rebooked in one transaction
+
+8
+00:00:42,870 --> 00:00:49,076
+The guard blocked the LLM's too-early departure time (TURN-001) · The LLM corrected itself: code decides what is legal
+
+9
+00:00:49,076 --> 00:00:54,487
+Every broken connection (red) is now protected (green)
+
+10
+00:00:54,487 --> 00:00:58,991
+The live feed shows every LLM decision, tool call and guard verdict
+
+11
+00:00:58,991 --> 00:01:05,242
+The AI may only propose network changes · They wait in the approval queue for a human controller
+
+12
+00:01:05,242 --> 00:01:12,913
+Step 2 · Try to break it: a rogue AI attacks the rules
+
+13
+00:01:12,913 --> 00:01:22,020
+Fly with the tired inbound crew → BLOCKED · FTL-001: crew duty limit, for every crew member
+
+14
+00:01:22,020 --> 00:01:31,156
+Dispatch before the engineer signs → BLOCKED · MX-001: no certificate of release to service
+
+15
+00:01:31,156 --> 00:01:41,549
+Call a tool with override=True → REJECTED · No override exists anywhere in the system
+
+16
+00:01:41,549 --> 00:01:51,961
+A failure halfway through rebooking → everything rolls back · State identical, 0 double bookings, then a clean retry
+
+17
+00:01:51,961 --> 00:01:56,768
+A revenue-first AI that ignores the rules → 15 violations, blocked · Vulnerable passengers always come first
+
+18
+00:01:56,768 --> 00:02:08,995
+Step 3 · The world changes after the plan
+
+19
+00:02:08,995 --> 00:02:14,501
+A diversion takes stand C31 · AeroTurn withdraws its own C31 proposal and stages the next legal stand, R205
+
+20
+00:02:14,501 --> 00:02:22,448
+Step 4 · You are the controller
+
+21
+00:02:22,448 --> 00:02:31,995
+Approve all: the rules are checked again at approval · The AI cannot approve anything itself
+
+22
+00:02:31,995 --> 00:02:41,398
+The wrong engineer (B2) is refused · the licensed B1 engineer signs · EK813 is released
+
+23
+00:02:41,398 --> 00:02:50,732
+Guardrails tab: live evidence for all five guardrails · Validation · prompt-injection defence · read/write separation · human approval · logging
+
+24
+00:02:50,732 --> 00:03:00,067
+Injection test: a passenger remark that tries to command the AI · is withheld before it reaches the LLM, and logged
+
+25
+00:03:00,067 --> 00:03:15,925
+13 edge cases: ATC holds, a second fatigue report, a leak, sold-out seats… · Each runs on a throw-away copy of the scenario
+
+26
+00:03:15,925 --> 00:03:25,407
+13 of 13 pass, 67 checks · 9 resolved automatically · 4 escalated to a human because no legal option exists
+
+27
+00:03:25,407 --> 00:03:27,421
+Try it yourself · Live demo: aeroturn-eaglex.streamlit.app · Code: github.com/RithikhC/EagleX · Rithikh Chandran · Mohammed Fawwaz Husain · Reuben Thomas Thovelil

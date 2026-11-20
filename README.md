@@ -8,7 +8,11 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
-**Round 1 submission (TechX Dubai'26 template): [PDF](docs/EagleX_Round1_Submission.pdf) · [PowerPoint](docs/EagleX_Round1_Submission.pptx)**, built with screenshots from the live demo.
+**Round 1 submission (TechX Dubai'26 template, 8 slides): [PDF](docs/EagleX_Round1_Submission.pdf) · [PowerPoint](docs/EagleX_Round1_Submission.pptx)**, built with screenshots from the live demo.
+
+**Demo video (subtitled, no voice-over): [docs/demo/AeroTurn_demo.mp4](docs/demo/AeroTurn_demo.mp4)** ([subtitles](docs/demo/AeroTurn_demo.srt)), recorded on the live demo.
+
+**Architecture and workflow diagram: [docs/img/architecture.png](docs/img/architecture.png)** · Form answers: [docs/SUBMISSION_FORM.md](docs/SUBMISSION_FORM.md)
 
 **Pitch deck: [PowerPoint](docs/AeroTurn_Deck.pptx) · [PDF](docs/AeroTurn_Deck.pdf)**. 17 slides built from real screenshots of the
 demo: every scenario, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
@@ -77,6 +81,8 @@ skips a step, a labelled **code autopilot** finishes it, so a live demo never en
 ---
 
 ## Architecture
+
+![AeroTurn architecture and workflow](docs/img/architecture.png)
 
 ```mermaid
 flowchart LR
@@ -260,9 +266,9 @@ aeroturn/                  the agent package (22 modules)
   faults.py · lab.py       chaos injection · sandboxed experiments
 tests/                     86 pytest tests in 9 files (+ conftest.py)
 data/                      pristine SQLite scenario + JSON snapshot
-scripts/                   build_dataset.py · pin_guards.py · deck/ (capture, crop and build the slide decks)
-docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH ·
-                           Round 1 submission and pitch deck (PDF + PPTX) · img/
+scripts/                   build_dataset.py · pin_guards.py · deck/ (capture screenshots, build decks and diagram, record the video)
+docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · SUBMISSION_FORM ·
+                           Round 1 submission and pitch deck (PDF + PPTX) · demo/ (video + subtitles) · img/
 .streamlit/config.toml     dashboard theme · .env.example: API key template · .devcontainer/: Codespaces setup
 ```
 
