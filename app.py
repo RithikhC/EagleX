@@ -1000,7 +1000,7 @@ with tabs[1]:
 # ===========================================================================
 def cb_injection_test():
     c = conn()
-    r = tools.dispatch(c, "list_disrupted_passengers", {}, actor="AGENT")
+    r = tools.dispatch(c, "list_disrupted_passengers", {"only_at_risk": False}, actor="AGENT")
     withheld = [p for p in r.get("passengers", []) if p.get("remarks") == sanitize.WITHHELD]
     push_incident("crit" if withheld else "warn", f"Injection test: {len(withheld)} passenger remark(s) withheld before "
                   f"reaching the LLM", [f"{p['pax_id']} {p['name']}: remark replaced with the withheld notice"
