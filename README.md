@@ -12,7 +12,7 @@ asleep, the first load takes about a minute.
 
 **Demo video (subtitled, no voice-over): [docs/demo/AeroTurn_demo.mp4](docs/demo/AeroTurn_demo.mp4)** ([subtitles](docs/demo/AeroTurn_demo.srt)), recorded on the live demo.
 
-**Architecture and workflow diagram: [docs/img/architecture.png](docs/img/architecture.png)** · Form answers: [docs/SUBMISSION_FORM.md](docs/SUBMISSION_FORM.md)
+**Architecture and workflow diagram: [docs/img/architecture.png](docs/img/architecture.png)** · Form answers: [docs/SUBMISSION_FORM.md](docs/SUBMISSION_FORM.md) · 5-minute pitch script for two speakers: [docs/PITCH_SCRIPT.md](docs/PITCH_SCRIPT.md)
 
 **Pitch deck: [PowerPoint](docs/AeroTurn_Deck.pptx) · [PDF](docs/AeroTurn_Deck.pdf)**. 18 slides built from real screenshots of the
 demo: every scenario, the 5 organiser curveballs, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
@@ -289,7 +289,7 @@ aeroturn/                  the agent package (23 modules)
 tests/                     103 pytest tests in 10 files (+ conftest.py)
 data/                      pristine SQLite scenario + JSON snapshot
 scripts/                   build_dataset.py · pin_guards.py · deck/ (capture screenshots, build decks and diagram, record the video)
-docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · SUBMISSION_FORM ·
+docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · PITCH_SCRIPT · SUBMISSION_FORM ·
                            Round 1 submission and pitch deck (PDF + PPTX) · demo/ (video + subtitles) · img/
 .streamlit/config.toml     dashboard theme · .env.example: API key template · .devcontainer/: Codespaces setup
 ```
