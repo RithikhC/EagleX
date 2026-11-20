@@ -105,8 +105,10 @@ function slide(title, criterion) {
   text(s, "EagleX  ·  University Track  ·  Domain 4: Aviation & Airport Operations",
     { x: M + 0.13, y: 4.3, w: 11, h: 0.45 }, { fontSize: 20, color: "C9D8F0" });
   text(s, [{ text: "Live demo  ", options: { color: "C9D8F0" } },
-    { text: LIVE.replace("https://", ""), options: { color: C.background1, bold: true, hyperlink: { url: LIVE } } }],
-    { x: M + 0.13, y: 5.15, w: 11, h: 0.4 }, { fontSize: 16 });
+    { text: LIVE.replace("https://", ""), options: { color: C.background1, bold: true, hyperlink: { url: LIVE }, breakLine: true } },
+    { text: "Code  ", options: { color: "C9D8F0" } },
+    { text: CODE.replace("https://", ""), options: { color: C.background1, bold: true, hyperlink: { url: CODE } } }],
+    { x: M + 0.13, y: 5.1, w: 11, h: 0.8 }, { fontSize: 16, paraSpaceAfter: 4 });
   s.addNotes("Round 1 submission for TechX Dubai'26 AI Agent Arena, University Track, Domain 4.");
 }
 
@@ -220,20 +222,20 @@ function slide(title, criterion) {
   const s = slide("What works today", "Technical · 30%");
   shot(s, "agent_run", { x: M, y: 1.5, w: 7.3, h: 5.15 }, { align: "left", alt: "Agent run on the live demo: input, steps and output" });
   const x = M + 7.6, w = W - M - x;
-  card(s, x, 1.5, w, 3.55, "working now");
+  card(s, x, 1.5, w, 3.95, "working now");
   text(s, [{ text: "Working now  ✓", options: { bold: true, fontSize: 19, color: C.text1, breakLine: true } }],
     { x: x + 0.3, y: 1.65, w: w - 0.5, h: 0.45 });
   text(s, bullets([
-    "Live recovery with a real LLM (Groq): stand, captain, retime, holds and 45 passengers + 48 bags in one transaction",
-    "Guards block illegal crew, missing sign-offs and overrides; the LLM corrects itself",
-    "Mid-way failure rolls back with no trace, then retries",
-    "Controller approval, engineer sign-off and departure release",
-    "What-if events and 13 edge cases, costs in AED",
-  ], 13), { x: x + 0.3, y: 2.15, w: w - 0.5, h: 2.85 }, { paraSpaceAfter: 4 });
-  card(s, x, 5.25, w, 1.4, "not finished");
-  text(s, [{ text: "Not finished yet", options: { bold: true, fontSize: 17, color: C.text1, breakLine: true } },
-    { text: "Data is synthetic: no live airline feeds yet. Crew rules are a simplified EASA model, not certified for the UAE.",
-      options: { fontSize: 13, color: C.dk2 } }], { x: x + 0.3, y: 5.35, w: w - 0.5, h: 1.25 });
+    "The 3 required services run end to end: get_turnaround_and_crew_state, execute_atomic_passenger_rebook, stage_controller_schedule_change",
+    "Real LLM (Groq) recovery: 45 passengers + 48 bags in one BEGIN / COMMIT / ROLLBACK transaction",
+    "Immutable guards for crew duty, maintenance sign-off and vulnerable priority; the LLM corrects itself",
+    "Controller approval, engineer sign-off, departure release",
+    "All 3 stretch goals: standby-crew matcher, critical path, EU261 cost (AED); 13 edge cases",
+  ], 12), { x: x + 0.3, y: 2.1, w: w - 0.45, h: 3.3 }, { paraSpaceAfter: 3 });
+  card(s, x, 5.6, w, 1.05, "not finished");
+  text(s, [{ text: "Not finished yet  ", options: { bold: true, fontSize: 14, color: C.text1 } },
+    { text: "Data is synthetic, because the brief supplies none and live feeds need airline system access. Crew rules are a simplified EASA model, not UAE-certified.",
+      options: { fontSize: 11.5, color: C.dk2 } }], { x: x + 0.25, y: 5.66, w: w - 0.4, h: 0.95 }, { valign: "middle" });
   s.addNotes("Screenshot from the live demo after pressing Run recovery agent: the banner shows the LLM run with a guard correction (TURN-001) and a rollback-and-retry; KPIs show 0 at risk and 10/10 vulnerable protected; the feed shows each step.");
 }
 
@@ -243,11 +245,11 @@ function slide(title, criterion) {
   const steps = [
     ["Trigger", "Controller presses Run recovery agent, or a world event arrives (ATC hold, fatigue report, leak)"],
     ["Plan", "Code collects facts with 6 read-only tools; the LLM returns a JSON plan: stand, captain, retime, holds, rebooking goal"],
-    ["Act", "Each decision runs through a guarded tool: stage a change, plan and execute the rebooking, send messages"],
+    ["Act", "Each decision runs through a guarded tool: stage a network change, or execute the rebooking atomically"],
     ["Check", "Sealed rules, schemas and database constraints; rejected decisions go back to the LLM; re-validation after"],
     ["Output", "Changes waiting for approval, committed rebooking, passenger messages, AED cost, an executive brief"],
   ];
-  const n = steps.length, gap = 0.28, cw = (W - 2 * M - (n - 1) * gap) / n, y = 1.5, h = 2.95;
+  const n = steps.length, gap = 0.28, cw = (W - 2 * M - (n - 1) * gap) / n, y = 1.5, h = 2.55;
   steps.forEach(([t, d], i) => {
     const x = M + i * (cw + gap);
     card(s, x, y, cw, h, t);
@@ -257,11 +259,17 @@ function slide(title, criterion) {
     if (i < n - 1) s.addShape(pres.shapes.CHEVRON, { x: x + cw + 0.04, y: y + h / 2 - 0.17, w: 0.2, h: 0.34,
       fill: { color: C.accent2 }, line: { color: C.accent2, width: 0 }, objectName: `chevron ${i}` });
   });
-  const bw = (W - 2 * M - 0.3) / 2, by = 4.7, bh = 1.95;
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: M, y: 4.18, w: W - 2 * M, h: 0.42, rectRadius: 0.08,
+    fill: { color: C.text1 }, line: { color: C.text1, width: 0 }, objectName: "required services" });
+  text(s, [{ text: "Required services:  ", options: { bold: true, color: "FFFFFF" } },
+    { text: "get_turnaround_and_crew_state()  ·  stage_controller_schedule_change()  ·  execute_atomic_passenger_rebook()",
+      options: { color: "DBE6F7", fontFace: "Courier New" } }],
+  { x: M + 0.25, y: 4.18, w: W - 2 * M - 0.5, h: 0.42 }, { fontSize: 11, valign: "middle" });
+  const bw = (W - 2 * M - 0.3) / 2, by = 4.75, bh = 1.9;
   card(s, M, by, bw, bh, "tech stack");
   text(s, [{ text: "Tech stack", options: { bold: true, fontSize: 18, color: C.text1, breakLine: true } },
     ...bullets(["LLM: Groq openai/gpt-oss-120b (Ollama or Gemini also work; offline policy if no key)",
-      "Python 3.12 with our own agent loop, no framework",
+      "Python 3.12+ with our own agent loop, no framework",
       "SQLite with atomic transactions · Streamlit + Plotly UI",
       "Hosted on Streamlit Community Cloud"], 13)], { x: M + 0.3, y: by + 0.15, w: bw - 0.5, h: bh - 0.25 }, { paraSpaceAfter: 2 });
   card(s, M + bw + 0.3, by, bw, bh, "llm vs code");
@@ -281,15 +289,18 @@ function slide(title, criterion) {
   const tw = 4.15;
   card(s, M, 1.5, tw, 5.15, "repository structure");
   text(s, "Repository structure", { x: M + 0.25, y: 1.62, w: tw - 0.4, h: 0.4 }, { fontSize: 17, bold: true, color: C.text1 });
+  // mirrors the GitHub repository (github.com/RithikhC/EagleX)
   const tree = [
-    ["aeroturn/", ""], ["  agent.py", "LLM planning loop"], ["  tools.py", "13 tools, schemas, dispatcher"],
-    ["  guards.py", "sealed safety rules"], ["  sanitize.py", "injection filter"], ["  hitl.py", "human approval"],
-    ["  reconcile.py", "re-validation"], ["  audit.py", "hash-chained log"], ["app.py", "Streamlit dashboard"],
-    ["tests/", "86 pytest tests"], ["data/", "synthetic scenario"], ["README.md", "how to run"],
+    ["aeroturn/", "agent package, 22 modules"], ["  agent.py", "LLM planning loop"], ["  llm.py", "Groq / Ollama / Gemini"],
+    ["  tools.py", "13 tools, dispatcher"], ["  guards.py", "sealed rules (+ .sha256)"], ["  sanitize.py", "injection filter"],
+    ["  hitl.py", "human approval"], ["  reconcile.py", "re-validation"], ["  audit.py", "hash-chained log"],
+    ["  recovery.py…", "rebook, crew, CPM, cost"], ["app.py", "Streamlit dashboard"], ["run_demo.py", "terminal demo"],
+    ["tests/", "86 pytest tests"], ["data/", "synthetic scenario"], ["scripts/", "data, guard pin, decks"],
+    ["docs/", "architecture, sources"], ["requirements.txt", "dependencies"], ["README.md", "how to run"],
   ];
-  text(s, tree.map(([a, b], i) => [{ text: a.padEnd(15, " "), options: { fontFace: "Courier New", fontSize: 11.5, color: C.text1, bold: !a.startsWith(" ") } },
-    { text: b, options: { fontFace: "Calibri", fontSize: 12, color: MUTED, breakLine: i < tree.length - 1 } }]).flat(),
-  { x: M + 0.25, y: 2.1, w: tw - 0.35, h: 4.45 }, { paraSpaceAfter: 3 });
+  text(s, tree.map(([a, b], i) => [{ text: a.padEnd(17, " "), options: { fontFace: "Courier New", fontSize: 10, color: C.text1, bold: !a.startsWith(" ") } },
+    { text: b, options: { fontFace: "Calibri", fontSize: 10.5, color: MUTED, breakLine: i < tree.length - 1 } }]).flat(),
+  { x: M + 0.22, y: 2.05, w: tw - 0.3, h: 4.55 }, { paraSpaceAfter: 1.5 });
   const boxes = [
     ["Input validation", "Strict JSON schema on every tool. Unknown arguments are rejected (\"no overrides exist\"); IDs and times are checked; bad LLM JSON is retried"],
     ["Prompt-injection defence", "Passenger text is untrusted. Instruction-like text is withheld before it reaches the LLM and logged; message templates cannot carry facts"],
@@ -312,17 +323,18 @@ function slide(title, criterion) {
 {
   const s = slide("System architecture", "Architecture · 20%");
   // diagram: user -> interface -> agent -> dispatcher -> tools/data -> output, with guards, approval and audit
-  const y = 1.6, h = 1.05, gap = 0.3, bw = (W - 2 * M - 5 * gap) / 6;
+  const y = 1.6, h = 1.1, gap = 0.24, bw = (W - 2 * M - 6 * gap) / 7;
   const flow = [["Operations controller", "user", "DBE6F7"], ["OCC dashboard", "Streamlit", "DBE6F7"],
     ["AeroTurn agent", "LLM planner (Groq)", "1F5FC0"], ["Tool dispatcher", "schema · read/write · injection filter", "0B2D6B"],
-    ["Aviation tools", "crew, stands, critical path, rebooking, cost", "DBE6F7"], ["Scenario database", "SQLite, atomic", "DBE6F7"]];
+    ["Aviation tools", "crew, stands, critical path, rebooking, cost", "DBE6F7"], ["Scenario database", "SQLite, atomic", "DBE6F7"],
+    ["Output", "approval queue, rebooking, messages, AED cost, brief", "E8F5EC"]];
   const x0 = M;
   flow.forEach(([t, d, fill], i) => {
     const x = x0 + i * (bw + gap), dark = fill === "1F5FC0" || fill === "0B2D6B";
     s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w: bw, h, rectRadius: 0.08, fill: { color: fill },
       line: { color: dark ? fill : BORDER, width: 1 }, objectName: `arch ${t}` });
-    text(s, [{ text: t, options: { bold: true, fontSize: 14, color: dark ? "FFFFFF" : C.text1, breakLine: true } },
-      { text: d, options: { fontSize: 11, color: dark ? "DBE6F7" : MUTED } }], { x: x + 0.1, y, w: bw - 0.2, h }, { align: "center", valign: "middle" });
+    text(s, [{ text: t, options: { bold: true, fontSize: 13, color: dark ? "FFFFFF" : C.text1, breakLine: true } },
+      { text: d, options: { fontSize: 10, color: dark ? "DBE6F7" : MUTED } }], { x: x + 0.06, y, w: bw - 0.12, h }, { align: "center", valign: "middle" });
     if (i < flow.length - 1) s.addShape(pres.shapes.RIGHT_ARROW, { x: x + bw + 0.04, y: y + h / 2 - 0.12, w: 0.24, h: 0.24,
       fill: { color: C.accent2 }, line: { color: C.accent2, width: 0 }, objectName: `flow arrow ${i}` });
   });
@@ -343,11 +355,11 @@ function slide(title, criterion) {
   [gx + bw / 2, gx + bw + gap + bw / 2, ax + bw / 2].forEach((cx, i) => s.addShape(pres.shapes.LINE,
     { x: cx, y: y + h, w: 0, h: 0.42, line: { color: MUTED, width: 1, dashType: "dash" }, objectName: `link ${i}` }));
   const uy = gy + 0.85;
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: x0 + (bw + gap), y: uy, w: 5 * bw + 4 * gap - (bw + gap), h: 0.5, rectRadius: 0.08,
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: x0 + (bw + gap), y: uy, w: 5 * bw + 4 * gap, h: 0.5, rectRadius: 0.08,
     fill: { color: "F3F4F6" }, line: { color: BORDER, width: 1 }, objectName: "audit" });
   text(s, [{ text: "Hash-chained audit log  ", options: { bold: true, color: C.text1 } },
     { text: "records every call, verdict, approval and transaction", options: { color: MUTED } }],
-  { x: x0 + (bw + gap) + 0.1, y: uy, w: 5 * bw + 4 * gap - (bw + gap) - 0.2, h: 0.5 }, { fontSize: 12, align: "center", valign: "middle" });
+  { x: x0 + (bw + gap) + 0.1, y: uy, w: 5 * bw + 4 * gap - 0.2, h: 0.5 }, { fontSize: 12, align: "center", valign: "middle" });
   const by = 4.75, bw2 = (W - 2 * M - 0.3) / 2, bh = 1.9;
   card(s, M, by, bw2, bh, "modules");
   text(s, [{ text: "Modules", options: { bold: true, fontSize: 17, color: C.text1, breakLine: true } },

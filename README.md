@@ -236,27 +236,34 @@ them with `python scripts/build_dataset.py`.
 ## Repository layout
 
 ```
-app.py                     Streamlit OCC console (guided demo + 9 deep-dive tabs)
-run_demo.py                terminal version of the demo (presentation fallback)
-aeroturn/
-  guards.py                IMMUTABLE safety floors (sealed + SHA-256 pinned in guards.sha256)
-  tools.py                 agent tools incl. the 3 required services; strict schemas; dispatcher
+app.py                     Streamlit OCC dashboard (8 tabs: Operations, Edge cases, Guardrails, Passengers,
+                           Crew & duty, Turnaround & MX, Cost & network, Audit & data)
+run_demo.py                terminal version of the demo (python run_demo.py --yes)
+requirements.txt           Python dependencies
+aeroturn/                  the agent package (22 modules)
+  agent.py                 LLM planning loop + offline policy + completeness check + code autopilot
+  llm.py                   Groq / Ollama / Gemini via OpenAI-compatible API (stdlib only)
+  tools.py                 13 agent tools incl. the 3 required services; read/propose/write classes; dispatcher
+  guards.py · guards.sha256  IMMUTABLE safety rules (sealed module, SHA-256 pinned)
+  sanitize.py              prompt-injection filter for untrusted passenger text
   hitl.py                  controller approval / rejection, engineer CRS, sim clock (NOT agent-callable)
-  agent.py                 LLM loop + offline policy + completeness check + code autopilot
   reconcile.py             continuous re-validation: withdraw, re-stage, re-plan or escalate
   edge_cases.py            13 sandboxed what-if cases with readable checks
-  llm.py                   Ollama / Groq / Gemini via OpenAI-compatible API (stdlib only)
-  recovery.py              connection risk + priority-protected planner (+ unconstrained baseline)
+  recovery.py              connection risk + priority-protected rebooking planner (+ unconstrained baseline)
   crew.py                  standby crew pairing matcher
   turnaround.py            critical-path (CPM) tracker
-  costs.py                 EU261 / duty-of-care / delay / hold analysis
+  costs.py                 EU261 / duty-of-care / delay / hold analysis (AED)
   narrative.py             executive brief, notification templates, grounding check
-  db.py · audit.py         schema, invariants, fingerprint · hash-chained audit
-  dataset.py               synthetic scenario generator
+  audit.py · db.py         hash-chained audit log · schema, invariants, state fingerprint
+  dataset.py · facts.py    synthetic scenario generator (seed 812) · typed facts for the guards
+  config.py · timeutil.py  commercial assumptions, paths · time helpers
   faults.py · lab.py       chaos injection · sandboxed experiments
-data/                      pristine SQLite + JSON snapshot
-docs/                      DEMO_SCRIPT.md · PITCH.md · ARCHITECTURE.md
-tests/                     86 pytest tests
+tests/                     86 pytest tests in 9 files (+ conftest.py)
+data/                      pristine SQLite scenario + JSON snapshot
+scripts/                   build_dataset.py · pin_guards.py · deck/ (capture, crop and build the slide decks)
+docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH ·
+                           Round 1 submission and pitch deck (PDF + PPTX) · img/
+.streamlit/config.toml     dashboard theme · .env.example: API key template · .devcontainer/: Codespaces setup
 ```
 
 ## Deploying the live demo (Streamlit Community Cloud, free)
