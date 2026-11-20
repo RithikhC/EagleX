@@ -116,3 +116,13 @@ def test_seen_hash_mismatch_refuses_a_one_step_approval(conn):
                          "justification": "x"})
     r = hitl.approve(conn, st["change_id"], CTRL, seen_hash="not-what-is-there")
     assert r["status"] == "STALE"
+
+
+def test_batch_summary_counts_only_committed_work(conn):
+    p = recovery.plan_recovery(conn)
+    faults.arm(conn, "SEAT_CONFLICT", 3, batch=1)
+    r = tools.execute_atomic_passenger_rebook(conn, plan_id=p["plan_id"], batch_size=10)
+    assert r["status"] == "COMMITTED" and r["summary"]["retried"] == [1]
+    bags = sum(len(a["bags"]) for a in p["assignments"])
+    assert r["summary"]["bags_rerouted"] + r["summary"]["bags_forwarded"] == bags
+    assert len(r["summary"]["vulnerable_first"]) == len(set(r["summary"]["vulnerable_first"]))

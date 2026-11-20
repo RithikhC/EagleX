@@ -828,6 +828,7 @@ def _execute_batched(conn, plan_id: str, items: list[dict], verdict, fault: dict
 
     fp_start = db.state_fingerprint(conn)
     report, all_steps, injected = [], [], None
+    kept: list[dict] = []   # steps of committed transactions only (rolled-back ones left no trace)
     rebooked, escalated = 0, []
     for b, start in zip(batches, offsets):
         n = b["batch"]
@@ -842,6 +843,8 @@ def _execute_batched(conn, plan_id: str, items: list[dict], verdict, fault: dict
             injected = res["bag_fault"] | {"batch": n}
         entry["attempts"].append(_attempt(txn_id, res))
         all_steps.extend(res["steps"])
+        if res["status"] == "COMMITTED":
+            kept.extend(res["steps"])
         audit.log(conn, "TXN", f"{'COMMIT' if res['status'] == 'COMMITTED' else 'ROLLBACK'} batch {n}/{len(batches)}",
                   {"txn_id": txn_id, "plan_id": plan_id, "batch": n, "pax": len(b["items"]),
                    "error": res.get("error"), "state_identical_to_before": res["fp_before"] == res["fp_after"]})
@@ -867,6 +870,8 @@ def _execute_batched(conn, plan_id: str, items: list[dict], verdict, fault: dict
             res2 = _run_batch(conn, retry_items, txn_id=txn2, ctx=ctx, bag_fault_step=again, step_offset=start)
             entry["attempts"].append(_attempt(txn2, res2) | {"replanned": True})
             all_steps.extend(res2["steps"])
+            if res2["status"] == "COMMITTED":
+                kept.extend(res2["steps"])
             audit.log(conn, "TXN", f"{'COMMIT' if res2['status'] == 'COMMITTED' else 'ROLLBACK'} batch {n} retry",
                       {"txn_id": txn2, "plan_id": plan_id, "batch": n, "pax": len(retry_items),
                        "error": res2.get("error")})
@@ -901,7 +906,7 @@ def _execute_batched(conn, plan_id: str, items: list[dict], verdict, fault: dict
         report.append(entry)
 
     inv_after = db.check_invariants(conn)
-    ok_steps = [s for s in all_steps if s.get("ok")]
+    ok_steps = [s for s in kept if s.get("ok")]
     committed = [e for e in report if e["status"] != "HANDED_TO_CONTROLLER"]
     status = "COMMITTED" if not escalated else ("PARTIAL" if committed else "ROLLED_BACK")
     _set_plan_status(conn, plan_id, {"COMMITTED": "EXECUTED", "PARTIAL": "PARTIAL"}.get(status, "ROLLED_BACK"))
