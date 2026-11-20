@@ -22,7 +22,7 @@ const flow = [
   ["AeroTurn agent", "LLM planner (Groq gpt-oss-120b)", BLUE, "FFFFFF"],
   ["Tool dispatcher", "schema check · read / propose / write · injection filter", NAVY, "FFFFFF"],
   ["13 aviation tools", "crew matcher, stands, critical path, rebooking, EU261 cost", LIGHT, NAVY],
-  ["Scenario database", "SQLite · atomic BEGIN / COMMIT / ROLLBACK", LIGHT, NAVY],
+  ["Scenario database", "SQLite · atomic batches · every bag has a plan", LIGHT, NAVY],
   ["Output", "approval queue, rebooking, messages, AED cost, brief", "E8F5EC", "15803D"],
 ];
 flow.forEach(([t, d, fill, ink], i) => {
@@ -44,8 +44,8 @@ function box(x, w, title, sub, fill, line) {
   T([{ text: title, options: { bold: true, fontSize: 14, color: line, breakLine: true } },
     { text: sub, options: { fontSize: 11, color: "1F2937" } }], { x: x + 0.1, y: gy, w: w - 0.2, h: gh, align: "center", valign: "middle" });
 }
-box(cx(1), 2 * bw + gap, "Human approval (HITL)", "gate, crew, retime, holds, release wait for a named controller; guards re-run; decisions expire", "E8F5EC", "15803D");
-box(cx(3), 2 * bw + gap, "Validation: sealed guards", "25 rules (crew duty, maintenance sign-off, passenger priority), SHA-256 pinned; illegal = blocked", "FDECEC", "B91C1C");
+box(cx(1), 2 * bw + gap, "Human approval (HITL)", "gate, crew, retime, holds, release wait for a named controller; guards re-run; approval bound to the state seen; decisions expire", "E8F5EC", "15803D");
+box(cx(3), 2 * bw + gap, "Validation: sealed guards", "28 rules (crew duty, maintenance sign-off, passenger and bag priority), SHA-256 pinned; illegal = blocked", "FDECEC", "B91C1C");
 box(cx(5), 2 * bw + gap, "Continuous re-validation", "when the world changes: withdraw what became illegal, stage the next legal option or escalate", "FFF7E6", "B45309");
 [[1.5, 1], [3.5, 3], [5.5, 5]].forEach(([c]) => s.addShape(pres.shapes.LINE, { x: M + c * (bw + gap) + bw / 2 - (bw + gap) / 2 + (bw + gap) / 2, y: y + h, w: 0, h: 0.55,
   line: { color: MUTED, width: 1, dashType: "dash" } }));
@@ -59,7 +59,7 @@ const wy = ay + 0.8;
 T("Workflow", { x: M, y: wy, w: 3, h: 0.4, fontSize: 18, bold: true, color: NAVY });
 const steps = [["Trigger", "controller presses Run recovery agent, or a world event arrives"],
   ["Plan", "code gathers facts with 6 read-only tools; the LLM returns a JSON plan"],
-  ["Act", "each decision runs through a guarded tool (stage a change / atomic rebooking)"],
+  ["Act", "each decision runs through a guarded tool: stage a change, or rebook atomically"],
   ["Check", "guards and DB constraints; rejected choices go back to the LLM"],
   ["Approve", "the controller approves; the engineer signs; the flight is released"]];
 const sw = (W - 2 * M - 4 * 0.2) / 5;

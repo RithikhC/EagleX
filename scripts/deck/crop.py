@@ -87,6 +87,11 @@ save(img, r["banner"], "whatif_banner")
 save(img, row(r, "C", "ctrl", "guard"), "whatif_queue_guard")
 
 # edge cases tab: KPI strip and three cards (positions read off the 2x capture)
+img, r = load("16_curveballs")
+save(img, r["kpis"], "curveballs_kpis")
+save(img, r["cb1"], "curveball_u41", pad=10)
+save(img, r["cb5"], "curveball_u45", pad=10)
+
 img, r = load("11_edge")
 save(img, r["kpis"], "edge_kpis")
 save(img, [568, 360, 466, 424], "edge_ec02", pad=2)

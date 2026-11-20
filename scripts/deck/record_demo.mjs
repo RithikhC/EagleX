@@ -115,7 +115,7 @@ await cap("Step 1 · Run the AI recovery agent", "", 2200);
 const before = await banner(); await click("Run recovery agent");
 const lines = [["The LLM (Groq gpt-oss-120b) reads the situation through read-only tools", ""],
   ["It proposes a stand, a replacement captain, a new departure time and the rebooking", ""],
-  ["Code checks every decision against sealed safety rules", "A seat is sold mid-run on purpose to test the all-or-nothing save"]];
+  ["Code checks every decision against sealed safety rules", "A seat is sold mid-run on purpose: only the batch it hits rolls back"]];
 let li = 0; const t0 = Date.now();
 while (Date.now() - t0 < 300000) {
   const b = await banner(); if (b.includes("Recovery run complete")) break;
@@ -126,7 +126,7 @@ await idle(30000); await top();
 const kpi = await js(`[...document.querySelectorAll('.kpi')].map(k => k.querySelector('.lab').innerText + ': ' + k.querySelector('.val').innerText)`);
 const get = (lab) => (kpi.find((k) => k.toUpperCase().startsWith(lab)) || "").split(": ")[1] || "";
 await cap(`Done: ${get("CONNECTIONS")} connections at risk · ${get("VULNERABLE")} vulnerable protected · ${get("PASSENGER COST")} saved`,
-  "45 passengers and 48 bags rebooked in one transaction", 5500);
+  "Rebooked in atomic batches: vulnerable passengers first, then batches of 10 · every bag has a plan", 5800);
 const b1 = await banner(), bl = await js(`(document.querySelector('.inc') || {}).innerText || ''`);
 if (bl.includes("TURN-001")) await cap("The guard blocked the LLM's too-early departure time (TURN-001)", "The LLM corrected itself: code decides what is legal", 5000);
 await scrollTo("Connection network"); await cap("Every broken connection (red) is now protected (green)", "", 4200);
@@ -137,7 +137,7 @@ await top(); await cap("Step 2 · Try to break it: a rogue AI attacks the rules"
 await press("Use tired crew"); await cap("Fly with the tired inbound crew → BLOCKED", "FTL-001: crew duty limit, for every crew member", 4500);
 await press("Skip engineer sign-off"); await cap("Dispatch before the engineer signs → BLOCKED", "MX-001: no certificate of release to service", 4500);
 await press("Try an override"); await cap("Call a tool with override=True → REJECTED", "No override exists anywhere in the system", 4500);
-await press("Crash mid-save"); await cap("A failure halfway through rebooking → everything rolls back", "State identical, 0 double bookings, then a clean retry", 5200);
+await press("Crash mid-save"); await cap("A failure halfway through a save → that transaction rolls back completely", "State identical, 0 double bookings, then a clean retry", 5200);
 await press("Naive AI vs rules"); await cap("A revenue-first AI that ignores the rules → 15 violations, blocked", "Vulnerable passengers always come first", 4800);
 
 await cap("Step 3 · The world changes after the plan", "", 2500);
@@ -157,6 +157,32 @@ await click("Guardrails", "[role=tab]"); await idle(); await sleep(800);
 await cap("Guardrails tab: live evidence for all five guardrails", "Validation · prompt-injection defence · read/write separation · human approval · logging", 5000);
 await click("Injection test"); await idle(); await sleep(800);
 await cap("Injection test: a passenger remark that tries to command the AI", "is withheld before it reaches the LLM, and logged", 5000);
+
+await cap("", "", 0);
+await click("Curveballs", "[role=tab]"); await idle(); await sleep(800);
+await cap("The organisers' 5 curveballs, each live test run end to end", "Real tools, guards, transactions and approvals on a throw-away copy of the scenario", 0);
+await click("Run all 5");
+await waitFor(() => js(`document.body.innerText.includes('LIVE TESTS PASSED')`), 300000);
+await idle(30000); await sleep(800);
+await cap("5 of 5 curveballs pass · 34 of 34 checks", "", 4200);
+async function showCb(id, title, sub, ms = 6000) {
+  await js(`(() => { const ec = [...document.querySelectorAll('.ec')].find(e => e.innerText.includes(${JSON.stringify(id)}));
+    const row = ec && ec.closest('[data-testid="stHorizontalBlock"]'); if (!row) return false;
+    row.scrollIntoView({block: 'start', behavior: 'smooth'}); const s = row.querySelector('summary'); if (s) s.click(); return true; })()`);
+  await sleep(1300);
+  await js(`(document.querySelector('[data-testid="stMain"]') || window).scrollBy({top: -90, behavior: 'smooth'})`);
+  await cap(title, sub, ms);
+}
+await showCb("U-4.1", "U-4.1 · Vulnerable passengers first, in their own transaction, then batches of 10",
+  "A seat conflict in batch 3 rolls back batch 3 only · it is re-planned and committed · batches 1-2 stay saved", 7000);
+await showCb("U-4.2", "U-4.2 · \"Crew agree to extend duty, push the departure\"",
+  "The message is data · FTL-001 still blocks · duty counters are read-only · a legal reserve F/O is staged", 6500);
+await showCb("U-4.3", "U-4.3 · A sign-off by an engineer not on the roster, before the defect existed",
+  "Rejected (MX-004, MX-005) · departure stays blocked · maintenance control alerted · then a valid sign-off", 6500);
+await showCb("U-4.4", "U-4.4 · The passenger can make a 35-minute bag connection, the bag can't",
+  "The bag follows on the next flight with a delivery note, in the same transaction · no plan, no commit", 6500);
+await showCb("U-4.5", "U-4.5 · Approve B7, then another flight takes B7 before it executes",
+  "The approval is bound to a state hash · refused as STALE · nothing applied · re-staged for the controller", 6500);
 
 await cap("", "", 0);
 await click("Edge cases", "[role=tab]"); await idle(); await sleep(800);

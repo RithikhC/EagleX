@@ -222,7 +222,7 @@ EK813 itself pays no EU261: it departs Dubai on a non-EU airline (Art. 3(1)).
 | 6 reverted, step 7 | In the rollback demo, the injected seat conflict hits the 7th booking; the 6 already written are undone |
 | 13 / 67 | Edge cases / checks; 9 resolved automatically, 4 escalated |
 | 5 / 34 | Organiser curveballs U-4.1–U-4.5 / checks, all passing |
-| 102 | Automated tests |
+| 103 | Automated tests |
 | 13 · 10 · 10 · 8 | Rebooking batches in the main run: batch 1 = the 10 vulnerable passengers plus their PNR groups (13), then batches of at most 10 |
 | 33 min | When a transfer bag reaches the transfer belt: 3 min chocks/GPU + 30 min hold offload (turnaround tasks ONB + OFFL) |
 | 45 min | Bag minimum connection time from the belt to the onward departure |

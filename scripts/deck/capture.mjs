@@ -146,6 +146,36 @@ if (stage === "all" || stage === "main") {
   await shot("11_edge", ec);
 }
 
+// ---------------- the organisers' curveballs (U-4.1..U-4.5), run live on the Curveballs tab
+if (stage === "all" || stage === "curveballs") {
+  await viewport(1000);
+  await send("Page.navigate", { url: APP }); await idle(90000, 2500);
+  await click("Hide guide"); await idle();
+  await click("Curveballs", { selector: "[role=tab]" }); await idle();
+  await click("Run all 5");
+  await waitFor(() => evalJs(`document.body.innerText.includes('LIVE TESTS PASSED')`), 300000);
+  await idle(30000, 3000);
+  await viewport(5200); await idle(20000);
+  for (const id of ["U-4.1", "U-4.5"]) {
+    await evalJs(`(() => { const ec = [...document.querySelectorAll('.ec')].find(e => e.innerText.includes(${JSON.stringify(id)}));
+      const row = ec && ec.closest('[data-testid="stHorizontalBlock"]'); const s = row && row.querySelector('summary');
+      if (s) s.click(); return !!s; })()`);
+    await sleep(1200);
+  }
+  await sleep(1500);
+  const cb = await evalJs(`(() => { const R = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top + window.scrollY, r.width, r.height]; };
+      const out = {};
+      for (const id of ['U-4.1', 'U-4.2', 'U-4.3', 'U-4.4', 'U-4.5']) {
+        const ec = [...document.querySelectorAll('.ec')].find(e => e.innerText.includes(id));
+        const row = ec && ec.closest('[data-testid="stHorizontalBlock"]');
+        out[id.replace('U-4.', 'cb')] = row ? R(row) : null;
+      }
+      const head = [...document.querySelectorAll('.sec')].find(e => e.innerText.toUpperCase().includes('CURVEBALLS'));
+      out.cbhead = head ? R(head) : null;
+      return out; })()`);
+  await shot("16_curveballs", cb);
+}
+
 // ---------------- banners only, at a narrower width so their text reads at slide size
 if (stage === "banners") {
   await viewport(1400);

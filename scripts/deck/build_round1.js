@@ -144,7 +144,7 @@ function slide(title, criterion) {
   card(s, M, y, W - 2 * M, h, "solution");
   text(s, [{ text: "Our agent  ", options: { bold: true, color: C.text1, breakLine: true } },
     { text: "AeroTurn helps controllers recover the disruption: the AI plans the stand, captain, retime and rebooking of 45 "
-      + "passengers and 48 bags in one transaction, code enforces every safety rule, and the controller approves.",
+      + "passengers and 48 bags (vulnerable first, in atomic batches), code enforces every safety rule, and the controller approves.",
       options: { color: C.dk2 } }], { x: M + 0.25, y: y + 0.15, w: 4.1, h: h - 0.3 }, { fontSize: 13.5 });
   shot(s, "map_before", { x: M + 4.45, y: y + 0.12, w: 2.3, h: h - 0.24 }, { alt: "Before: 45 broken connections in red" });
   s.addShape(pres.shapes.RIGHT_ARROW, { x: M + 6.83, y: y + h / 2 - 0.16, w: 0.32, h: 0.32, fill: { color: C.accent2 },
@@ -168,9 +168,9 @@ function slide(title, criterion) {
     [cell("Tools and data", { fontSize: 16 }), cell("No tools; answers from memory"),
       cell("13 aviation tools: legal standby-crew matcher, turnaround critical path, stand evaluator, priority rebooking planner, EU261 cost model; a database of 342 passengers, 356 bags, 33 crew")],
     [cell("Reliability", { fontSize: 16 }), cell("Trusts whatever the LLM says"),
-      cell("25 sealed safety rules (SHA-256 pinned), all-or-nothing rebooking, controller approval that re-checks every rule, 86 tests")],
+      cell("28 sealed safety rules (SHA-256 pinned), atomic rebooking batches, approvals bound to the state the controller saw, 103 tests")],
     [cell("Our unique idea", { fontSize: 16, bold: true }), cell("—"),
-      cell("Continuous re-validation: when the world changes after the plan (ATC hold, a second fatigue report, a leak found), the agent withdraws its own now-illegal proposals, stages the next legal option or escalates to a human. 13 edge cases prove it", { bold: true, color: C.text1 })],
+      cell("Continuous re-validation: when the world changes after the plan (ATC hold, a second fatigue report, a leak found), the agent withdraws its own now-illegal proposals, stages the next legal option or escalates to a human. 13 edge cases and the organisers' 5 curveballs prove it, live", { bold: true, color: C.text1 })],
   ];
   s.addTable(rows, { x: M, y: 1.55, w: W - 2 * M, colW: [2.35, 3.4, W - 2 * M - 5.75], rowH: [0.6, 1.0, 1.15, 0.95, 1.25],
     border: { type: "solid", color: BORDER, pt: 1 }, valign: "middle", margin: [0.06, 0.12, 0.06, 0.12], fontFace: "Calibri" });
@@ -179,14 +179,18 @@ function slide(title, criterion) {
 // ------------------------------------------------------------------ 4. what works today
 {
   const s = slide("What works today", "Technical · 30%");
-  shot(s, "agent_run", { x: M, y: 1.5, w: 7.3, h: 5.15 }, { align: "left", alt: "Agent run on the live demo: input, steps and output" });
+  shot(s, "agent_run", { x: M, y: 1.5, w: 7.3, h: 4.05 }, { align: "left", valign: "top", alt: "Agent run on the live demo: input, steps and output" });
+  text(s, "The organisers' curveballs U-4.1 to U-4.5, run live on the Curveballs tab:", { x: M, y: 5.68, w: 7.3, h: 0.3 },
+    { fontSize: 12, bold: true, color: C.text1, valign: "middle" });
+  shot(s, "curveballs_kpis", { x: M, y: 6.0, w: 6.05, h: 0.7 }, { align: "left", alt: "Curveballs: 5 of 5 live tests pass, 34 of 34 checks" });
   const x = M + 7.6, w = W - M - x;
   card(s, x, 1.5, w, 3.95, "working now");
   text(s, [{ text: "Working now  ✓", options: { bold: true, fontSize: 19, color: C.text1, breakLine: true } }],
     { x: x + 0.3, y: 1.65, w: w - 0.5, h: 0.45 });
   text(s, bullets([
-    "The 3 required services run end to end: get_turnaround_and_crew_state, execute_atomic_passenger_rebook, stage_controller_schedule_change",
-    "Real LLM (Groq) recovery: 45 passengers + 48 bags in one BEGIN / COMMIT / ROLLBACK transaction",
+    "The 3 required services run end to end (state, atomic rebooking, staged schedule changes)",
+    "Real LLM (Groq) recovery: vulnerable passengers first in their own transaction, then atomic batches of 10; every bag gets a plan",
+    "All 5 organiser curveballs pass live: batch rollback, \"crew agree to extend\", forged sign-off, bag can't connect, stale approval",
     "Immutable guards for crew duty, maintenance sign-off and vulnerable priority; the LLM corrects itself",
     "Controller approval, engineer sign-off, departure release",
     "All 3 stretch goals: standby-crew matcher, critical path, EU261 cost (AED); 13 edge cases",
@@ -250,11 +254,11 @@ function slide(title, criterion) {
   text(s, "Repository structure", { x: M + 0.25, y: 1.62, w: tw - 0.4, h: 0.4 }, { fontSize: 17, bold: true, color: C.text1 });
   // mirrors the GitHub repository (github.com/RithikhC/EagleX)
   const tree = [
-    ["aeroturn/", "agent package, 22 modules"], ["  agent.py", "LLM planning loop"], ["  llm.py", "Groq / Ollama / Gemini"],
+    ["aeroturn/", "agent package, 23 modules"], ["  agent.py", "LLM planning loop"], ["  llm.py", "Groq / Ollama / Gemini"],
     ["  tools.py", "13 tools, dispatcher"], ["  guards.py", "sealed rules (+ .sha256)"], ["  sanitize.py", "injection filter"],
     ["  hitl.py", "human approval"], ["  reconcile.py", "re-validation"], ["  audit.py", "hash-chained log"],
     ["  recovery.py…", "rebook, crew, CPM, cost"], ["app.py", "Streamlit dashboard"], ["run_demo.py", "terminal demo"],
-    ["tests/", "86 pytest tests"], ["data/", "synthetic scenario"], ["scripts/", "data, guard pin, decks"],
+    ["tests/", "103 pytest tests"], ["data/", "synthetic scenario"], ["scripts/", "data, guard pin, decks"],
     ["docs/", "architecture, sources"], ["requirements.txt", "dependencies"], ["README.md", "how to run"],
   ];
   text(s, tree.map(([a, b], i) => [{ text: a.padEnd(17, " "), options: { fontFace: "Courier New", fontSize: 10, color: C.text1, bold: !a.startsWith(" ") } },
@@ -263,10 +267,10 @@ function slide(title, criterion) {
   const boxes = [
     ["Input validation", "Strict JSON schema on every tool. Unknown arguments are rejected (\"no overrides exist\"); IDs and times are checked; bad LLM JSON is retried"],
     ["Prompt-injection defence", "Passenger text is untrusted. Instruction-like text is withheld before it reaches the LLM and logged; message templates cannot carry facts"],
-    ["Human approval", "Gate, crew swap, retime, holds and departure release pause for a named controller. Rules re-run at approval; decisions expire"],
+    ["Human approval", "Gate, crew swap, retime, holds and release pause for a named controller. Rules re-run; an approval binds to the state shown (stale = refused); decisions expire"],
     ["Logging", "Every tool call, guard verdict, approval and transaction goes into a hash-chained audit log; editing any entry breaks the chain"],
     ["Read/write separation", "Each tool is read, propose or write. The planner's fact phase is locked to read tools; approval is not a tool"],
-    ["Deterministic validation", "25 rules in a sealed, SHA-256-pinned module; 86 tests and 13 edge cases, all passing"],
+    ["Deterministic validation", "28 rules in a sealed, SHA-256-pinned module; 103 tests, 13 edge cases and 5 curveballs, all passing"],
   ];
   const gx = M + tw + 0.3, gw = (W - M - gx - 0.3) / 2, gh = 1.6, gg = 0.17;
   boxes.forEach(([h, d], i) => {
@@ -292,7 +296,7 @@ function slide(title, criterion) {
     { text: "agent.py plans · tools.py dispatches 13 tools · guards.py owns every rule · hitl.py approvals · reconcile.py re-validation · audit.py log · app.py dashboard",
       options: { color: C.dk2, breakLine: true } },
     { text: "Data flow  ", options: { bold: true, color: C.text1 } },
-    { text: "seed-812 scenario copied into a private SQLite per visitor → read tools → LLM plan → guarded writes in one transaction → audit log → dashboard",
+    { text: "seed-812 scenario copied into a private SQLite per visitor → read tools → LLM plan → guarded writes in atomic batches → audit log → dashboard",
       options: { color: C.dk2 } }], { x: M, y: ty, w: aw + 0.1, h: 6.65 - ty }, { fontSize: 11.5, paraSpaceAfter: 4 });
   const ux = M + aw + 0.4, uw = W - M - ux;
   text(s, "User experience: four clicks", { x: ux, y: 1.45, w: uw, h: 0.4 }, { fontSize: 17, bold: true, color: C.text1 });

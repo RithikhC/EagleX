@@ -5,6 +5,6 @@
   "aeroturn": "AED 50,440",
   "same_day": "45/45",
   "naive_h": "A naive optimiser breaks 15 rules",
-  "agent_note": "Real run with openai/gpt-oss-120b on Groq, Chaos on. The LLM picked stand C31 and Captain Mehta. Its first retime was too early, so the guard blocked it (TURN-001) and the model corrected itself. A seat sold mid-batch rolled the rebooking back, and the retry committed 45 passengers and 48 bags in one transaction.",
+  "agent_note": "Real run with openai/gpt-oss-120b on Groq, Chaos on. The LLM picked stand C31 and Captain Mehta. Its first retime was too early, so the guard blocked it (TURN-001) and the model corrected itself to 17:20. A seat sold mid-run rolled back only the batch it hit (batch 1, the vulnerable passengers); that batch was re-planned and committed, then everyone else in batches of 10: 45 passengers, 46 bags with their owners, and 2 Karachi bags forwarded on the 17:45 with a delivery note.",
   "cost_note": "In this run the controller queue held no connection hold, so all 45 passengers were rebooked: AED 50,440 against AED 133,390 for legacy next-day re-protection, a 62% saving. With the EK418 hold it falls to AED 40,200."
 }

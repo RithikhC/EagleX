@@ -129,7 +129,7 @@ These are modelling choices. They are listed so judges can challenge them, and t
 
 ```powershell
 python scripts/build_dataset.py    # regenerates byte-identical data from seed 812
-python -m pytest -q                # 102 tests incl. reproducibility, guards, rollback, HITL, curveballs, edge cases
+python -m pytest -q                # 103 tests incl. reproducibility, guards, rollback, HITL, curveballs, edge cases
 python run_demo.py --yes           # full scenario in the terminal with every verdict printed
 ```
 

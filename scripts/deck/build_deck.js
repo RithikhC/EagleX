@@ -158,7 +158,7 @@ pres.addSection({ title: "Introduction" });
   const s = content("Introduction", "HOW AEROTURN DECIDES", "The LLM proposes, code decides, a human approves");
   const cols = [
     { n: "1", h: "LLM agent", c: C.accent2, lines: ["Reads the situation through tools", "Chooses gate, captain, retime, holds and how to rebook", "Writes passenger messages and the brief"] },
-    { n: "2", h: "Code guards", c: C.accent1, lines: ["Sealed Python rules, SHA-256 pinned", "Crew duty, maintenance sign-off, vulnerable-passenger priority", "Atomic SQLite: all or nothing"] },
+    { n: "2", h: "Code guards", c: C.accent1, lines: ["Sealed Python rules, SHA-256 pinned", "Crew duty, maintenance sign-off, vulnerable-passenger priority", "Atomic SQLite batches: vulnerable passengers first"] },
     { n: "3", h: "Human controller", c: C.accent3, lines: ["Approves gate, crew, retime and release", "Guards run again at approval", "Decisions expire when the window closes"] },
   ];
   const cw = 3.75, cg = 0.42, cy = 1.75, ch = 3.55;
@@ -249,7 +249,7 @@ pres.addSection({ title: "Scenarios" });
     s.addText([{ text: h, options: { bold: true, fontSize: 17, color: C.text1, breakLine: true } },
       { text: d, options: { fontSize: 14, color: C.accent6 } }], { x: x + 0.3, y: y + 0.95, w: 2.3, h: 1.45, margin: 0, valign: "top", paraSpaceAfter: 4, isTextBox: true });
   });
-  s.addNotes("A seat is sold to someone else halfway through the 45-passenger rebooking. Everything rolls back, the state fingerprint is identical, and the retry commits on fresh inventory.");
+  s.addNotes("A seat is sold to someone else halfway through the rebooking. That transaction rolls back completely, the state fingerprint is identical, and the retry commits on fresh inventory. The agent itself writes in ordered batches (vulnerable passengers first, then batches of 10), so a failure only ever undoes its own batch.");
 }
 
 // ------------------------------------------------------------------ 8. scenario 4
@@ -331,6 +331,21 @@ pres.addSection({ title: "Scenarios" });
   s.addNotes("Each case runs on a throw-away copy of the scenario. 9 are resolved automatically and 4 are escalated to a human because no legal option exists. EC-07 shows the 3-minute hold on the last Kuala Lumpur flight that protects 10 passengers. The cases also found a bug in our own cost model, which we fixed.");
 }
 
+// ------------------------------------------------------------------ 12b. curveballs
+{
+  const s = content("Scenarios", "THE ORGANISERS' CURVEBALLS · U-4.1 TO U-4.5", "5 live tests, 34 checks, all pass");
+  shot(s, "curveballs_kpis", { x: M, y: 1.55, w: W - 2 * M, h: 0.85 }, { align: "left", alt: "Curveballs summary: 5/5 live tests passed" });
+  shot(s, "curveball_u41", { x: M, y: 2.55, w: 7.0, h: 4.3 }, { align: "left", alt: "U-4.1: seat conflict in batch 3, only batch 3 rolls back" });
+  points(s, [
+    { h: "U-4.1 Vulnerable first", d: "Own transaction, then batches of 10; batch 3 fails alone and is retried", b: "1" },
+    { h: "U-4.2 \"Crew agree to extend\"", d: "Message = data; duty counters read-only; legal reserve staged", b: "2" },
+    { h: "U-4.3 Forged sign-off", d: "Not on the roster, before the defect: rejected, MX control alerted", b: "3" },
+    { h: "U-4.4 Bag can't make it", d: "Bag plan in the same transaction, or no commit", b: "4" },
+    { h: "U-4.5 Stale approval", d: "Bound to a state hash: B7 taken, refused, re-staged", b: "5" },
+  ], { x: 7.95, y: 2.65, w: 4.8, gap: 0.86, head: 15, body: 12.5 });
+  s.addNotes("Open the Curveballs tab and press Run all 5. Each brief's exact live test runs on a throw-away copy of the scenario with the real tools, guards, transactions and controller workflow, then plain-language checks. The screenshot shows U-4.1: the injected seat conflict hits batch 3, only batch 3 rolls back, it is re-planned and committed; a second run shows a batch that fails twice being handed to the controller.");
+}
+
 // ------------------------------------------------------------------ 13. cost
 pres.addSection({ title: "Results" });
 {
@@ -349,7 +364,7 @@ pres.addSection({ title: "Results" });
   const s = content("Results", "RESULTS AT A GLANCE", "Safe by construction, fast in practice");
   const cells = [
     ["45/45", "broken connections recovered"], ["10/10", "vulnerable passengers protected"], ["−62%", "compensation and care vs legacy"],
-    ["0", "double bookings or orphaned bags"], ["13/13", "edge cases pass (67 checks)"], ["79", "automated tests pass"],
+    ["0", "double bookings or orphaned bags"], ["5 + 13", "curveballs and edge cases pass"], ["103", "automated tests pass"],
   ];
   cells.forEach(([v, l], i) => {
     const col = i % 3, row = Math.floor(i / 3);
@@ -481,7 +496,7 @@ pres.addSection({ title: "Real world" });
   ], M + colW + 0.23);
   s.addText("Every assumption (connection times, hold policy, costs) is listed with links in docs/DATA_SOURCES.md in the repository.",
     { x: M, y: 6.85, w: W - 2 * M, h: 0.35, fontSize: 12, color: C.accent6, margin: 0, isTextBox: true });
-  s.addNotes("All operational data is synthetic and reproducible; every rule is sourced. Judges can regenerate the data with python scripts/build_dataset.py and run the 79 tests.");
+  s.addNotes("All operational data is synthetic and reproducible; every rule is sourced. Judges can regenerate the data with python scripts/build_dataset.py and run the 103 tests.");
 }
 
 (async () => {

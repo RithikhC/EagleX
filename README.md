@@ -14,8 +14,8 @@ asleep, the first load takes about a minute.
 
 **Architecture and workflow diagram: [docs/img/architecture.png](docs/img/architecture.png)** · Form answers: [docs/SUBMISSION_FORM.md](docs/SUBMISSION_FORM.md)
 
-**Pitch deck: [PowerPoint](docs/AeroTurn_Deck.pptx) · [PDF](docs/AeroTurn_Deck.pdf)**. 17 slides built from real screenshots of the
-demo: every scenario, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
+**Pitch deck: [PowerPoint](docs/AeroTurn_Deck.pptx) · [PDF](docs/AeroTurn_Deck.pdf)**. 18 slides built from real screenshots of the
+demo: every scenario, the 5 organiser curveballs, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
 business case, and the datasets and sources on the thank-you slide. Rebuild it with `scripts/deck/`
 (headless-Chrome capture, crop, pptxgenjs).
 
@@ -52,7 +52,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
   (`aeroturn/config.py`).
 - 46 of the 48 bags travel with their owners; the 2 Karachi bags that cannot make the 16:35 (42 min, bag minimum
   45) follow on EK606 17:45 with a delivery note, written in the same transaction as their owners' seats.
-- 102 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
+- 103 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
   13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
 
 ---
@@ -63,7 +63,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 pip install -r requirements.txt
 streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
-python -m pytest -q           # 102 tests
+python -m pytest -q           # 103 tests
 ```
 
 ### Choose the brain (optional)
@@ -286,7 +286,7 @@ aeroturn/                  the agent package (23 modules)
   dataset.py · facts.py    synthetic scenario generator (seed 812) · typed facts for the guards
   config.py · timeutil.py  commercial assumptions, paths · time helpers
   faults.py · lab.py       chaos injection · sandboxed experiments
-tests/                     102 pytest tests in 10 files (+ conftest.py)
+tests/                     103 pytest tests in 10 files (+ conftest.py)
 data/                      pristine SQLite scenario + JSON snapshot
 scripts/                   build_dataset.py · pin_guards.py · deck/ (capture screenshots, build decks and diagram, record the video)
 docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · SUBMISSION_FORM ·
