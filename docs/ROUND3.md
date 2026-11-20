@@ -9,7 +9,8 @@ not a new project.
 |---|---|
 | Updated working link | https://aeroturn-eaglex.streamlit.app (code and run steps: https://github.com/RithikhC/EagleX) |
 | Round 3 presentation (official template, PDF) | https://github.com/RithikhC/EagleX/blob/main/docs/EagleX_Round3_Final.pdf · [PPTX](EagleX_Round3_Final.pptx) |
-| Log evidence (three safety cases) | Screenshot: https://github.com/RithikhC/EagleX/blob/main/docs/round3/log_evidence.png · Export: https://github.com/RithikhC/EagleX/blob/main/docs/round3/log_evidence.txt |
+| Log evidence (three safety cases) | Screenshot: https://github.com/RithikhC/EagleX/blob/main/docs/round3/log_evidence.png · Export: https://github.com/RithikhC/EagleX/blob/main/docs/round3/log_evidence.txt (the same run; the deck cites these log IDs) |
+| Proof of every number | [round3/NUMBERS_PROOF.md](round3/NUMBERS_PROOF.md) |
 | Live pitch and demo (7 + 5 min) | Script: [PITCH_ROUND3.md](PITCH_ROUND3.md) |
 
 ## The one user journey
@@ -49,13 +50,15 @@ rebooked with their bags, passenger messages and the cost in AED.
 
 | Measure | Value |
 |---|---|
-| Inbox request | ≈ 400 input + 50 output tokens · ≈ US$ 0.00009 · median 1.4 s |
-| Full recovery | 3 model calls · ≈ 5,200 input + 1,500 output tokens · ≈ US$ 0.0017 · 20–60 s end to end (median 35 s on the free tier) |
-| Burst | 12 requests in 18 s, 0 crashes, 3 timed-out calls recovered |
-| Pilot month (one hub: 500 requests + 30 recoveries a day) | ≈ US$ 2.90 in tokens; free tier (200K tokens/day) covers a demo, not a pilot |
+| Inbox request | ≈ 308 tokens · ≈ US$ 0.00006 · median 0.56 s |
+| Full recovery | 3 model calls · ≈ 5,200 input + 1,380 output tokens · ≈ US$ 0.0016 · 11.5–35 s, median 22.6 s over 5 back-to-back runs (model 3.6 s, rate-limit waits 11 s, our code 6.5 s; medians) |
+| Burst | 12 requests in 10.6 s, 0 crashes, 3 timed-out calls recovered |
+| Pilot month (assumed: 500 requests + 30 recoveries a day at one hub) | ≈ US$ 2.35 in tokens (≈ US$ 23 at 10×); about 351K tokens a day, above the free tier → paid tier |
+| Our Groq account | 8,000 tokens/minute, 1,000 requests/day (read from Groq's response headers) |
 
-Price used: US$ 0.15 per million input tokens and US$ 0.60 per million output tokens (GroqCloud list price for
-openai/gpt-oss-120b, October 2026). Check groq.com/pricing before quoting; prices change.
+Prices are from Groq's model pages (checked 21 Nov 2026): gpt-oss-120b US$ 0.15 / 0.60 and gpt-oss-20b
+US$ 0.075 / 0.30 per million input / output tokens. Every number's source is in
+[round3/NUMBERS_PROOF.md](round3/NUMBERS_PROOF.md).
 
 ## Final checklist (from the participant manual)
 

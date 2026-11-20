@@ -29,10 +29,17 @@ HOME_CARRIER = "EK"
 # Money is reported in UAE dirhams. EU261 amounts are fixed in EUR by law and are converted at EUR_TO_AED.
 CURRENCY = "AED"
 EUR_TO_AED = 4.10                 # reference mid-market rate (27 Oct 2026); set to the day's rate
-# LLM price for the cost report (GroqCloud list price for openai/gpt-oss-120b; check groq.com/pricing before quoting)
-PRICE_IN_PER_M = 0.15     # US$ per million input tokens
-PRICE_OUT_PER_M = 0.60    # US$ per million output tokens
-PRICE_SOURCE = "GroqCloud list price for openai/gpt-oss-120b, Oct 2026"
+# LLM prices for the cost report: Groq's official model pages (checked 21 Nov 2026)
+#   https://console.groq.com/docs/model/openai/gpt-oss-120b : input $0.15 / 1M tokens, output $0.60 / 1M
+#   https://console.groq.com/docs/model/openai/gpt-oss-20b  : input $0.075 / 1M tokens, output $0.30 / 1M
+MODEL_PRICES = {"openai/gpt-oss-120b": (0.15, 0.60), "openai/gpt-oss-20b": (0.075, 0.30)}   # US$ per 1M in, out
+PRICE_IN_PER_M, PRICE_OUT_PER_M = MODEL_PRICES["openai/gpt-oss-120b"]
+PRICE_SOURCE = "Groq model pages, console.groq.com/docs/model/openai/gpt-oss-120b (checked 21 Nov 2026)"
+
+
+def call_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    pin, pout = MODEL_PRICES.get(model, (PRICE_IN_PER_M, PRICE_OUT_PER_M))
+    return (input_tokens * pin + output_tokens * pout) / 1e6
 
 DELAY_COST_AED_PER_MIN = 400      # tactical delay cost, wide-body aircraft (assumption, ~EUR 100)
 PAX_MINUTE_AED = 1.50             # value of one passenger-minute of delay for those on board (assumption)

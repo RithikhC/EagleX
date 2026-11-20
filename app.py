@@ -1402,7 +1402,8 @@ with tabs[1]:
                     n_ = len(xs)
                     tin, tout = sum(x["input_tokens"] for x in xs) / n_, sum(x["output_tokens"] for x in xs) / n_
                     lat_ = sorted(x["latency_ms"] for x in xs)[n_ // 2]
-                    per_call = (tin * config.PRICE_IN_PER_M + tout * config.PRICE_OUT_PER_M) / 1e6
+                    per_call = sum(config.call_cost_usd(x["model"], x["input_tokens"], x["output_tokens"])
+                                   for x in xs) / n_   # each call at its own model's official price
                     rows_cost.append((job_, n_, tin, tout, lat_, per_call))
                 tbl = "".join(f"<tr><td><b>{'Full recovery run (per model call)' if j == 'recovery' else 'Inbox request'}</b>"
                               f"</td><td>{n}</td><td>{ti:,.0f} in / {to:,.0f} out</td><td>{la / 1000:.1f} s</td>"
@@ -1410,9 +1411,10 @@ with tabs[1]:
                 st.markdown("<table class='ptab'><tr><th>Job</th><th>Calls measured</th><th>Tokens per call</th>"
                             "<th>Median model latency</th><th>Cost per call</th></tr>" + tbl + "</table>",
                             unsafe_allow_html=True)
-                st.markdown(f"<div class='small' style='margin-top:6px'>Price used: US$ {config.PRICE_IN_PER_M} per "
-                            f"million input tokens and US$ {config.PRICE_OUT_PER_M} per million output tokens "
-                            f"({html.escape(config.PRICE_SOURCE)}). {len(fails_)} failed or timed-out call(s) were "
+                st.markdown(f"<div class='small' style='margin-top:6px'>Each call is priced at its own model's "
+                            f"official Groq price: gpt-oss-120b US$ 0.15 / 0.60 and gpt-oss-20b US$ 0.075 / 0.30 per "
+                            f"million input / output tokens (console.groq.com model pages, checked 21 Nov 2026). Tokens "
+                            f"are the provider's own usage counts. {len(fails_)} failed or timed-out call(s) were "
                             f"retried or handed to the backup. A full recovery makes 2 to 3 calls.</div>",
                             unsafe_allow_html=True)
 

@@ -280,6 +280,7 @@ class ResilientClient:
         self.calls: list[dict] = []  # this client's metered calls
         self.used = chain[0]
         self.simulate_slow = False   # per client: the primary model gets a 0.05 s limit and really times out
+        self.waits: list[float] = []  # seconds spent waiting on provider rate limits (measured, for the latency report)
 
     # identity of the primary model (what the run is labelled with)
     @property
@@ -312,8 +313,13 @@ class ResilientClient:
 
     def chat(self, messages: list[dict], **kw) -> LLMResponse:
         last = "no model configured"
+        def waited(s, why, _outer=self.on_wait):
+            self.waits.append(float(s))
+            if _outer:
+                _outer(s, why)
+
         for i, c in enumerate(self.chain):
-            c.on_wait = self.on_wait
+            c.on_wait = waited
             slow = self.simulate_slow or SIMULATION["mode"] == "slow_primary"
             limit = 0.05 if (slow and i == 0) else c.timeout
             for attempt in range(RETRIES + 1):

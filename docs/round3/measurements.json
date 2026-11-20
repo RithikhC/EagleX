@@ -1,45 +1,120 @@
 {
+  "measured_at": "2026-11-21 01:44",
   "brain": "openai/gpt-oss-120b via groq",
   "backups": [
     "openai/gpt-oss-20b via groq"
   ],
-  "price": {
-    "input_per_m_usd": 0.15,
-    "output_per_m_usd": 0.6,
-    "source": "GroqCloud list price for openai/gpt-oss-120b, Oct 2026"
+  "prices_usd_per_million_tokens": {
+    "openai/gpt-oss-120b": {
+      "input": 0.15,
+      "output": 0.6
+    },
+    "openai/gpt-oss-20b": {
+      "input": 0.075,
+      "output": 0.3
+    }
+  },
+  "price_source": "Groq model pages, console.groq.com/docs/model/openai/gpt-oss-120b (checked 21 Nov 2026)",
+  "account_limits": {
+    "requests_per_day": 1000,
+    "tokens_per_minute": 8000,
+    "source": "x-ratelimit-* headers of a live Groq response, 2026-11-21 01:42"
   },
   "recovery_runs": [
     {
-      "seconds": 34.6,
+      "seconds_total": 35.0,
+      "seconds_in_model_calls_incl_waits": 8.1,
+      "seconds_waiting_rate_limit": 0,
+      "seconds_model_answering": 8.1,
+      "seconds_other (tools, guards, database)": 26.8,
       "alert": "ACCEPTED",
       "model_calls": 3,
-      "input_tokens": 5188,
-      "output_tokens": 1426
+      "models": [
+        "openai/gpt-oss-120b"
+      ],
+      "input_tokens": 5198,
+      "output_tokens": 1342,
+      "cost_usd": 0.001585
     },
     {
-      "seconds": 60.0,
+      "seconds_total": 11.5,
+      "seconds_in_model_calls_incl_waits": 3.5,
+      "seconds_waiting_rate_limit": 0,
+      "seconds_model_answering": 3.5,
+      "seconds_other (tools, guards, database)": 8.1,
       "alert": "ACCEPTED",
       "model_calls": 3,
-      "input_tokens": 5249,
-      "output_tokens": 1578
+      "models": [
+        "openai/gpt-oss-120b"
+      ],
+      "input_tokens": 5182,
+      "output_tokens": 1373,
+      "cost_usd": 0.001601
     },
     {
-      "seconds": 20.2,
+      "seconds_total": 22.6,
+      "seconds_in_model_calls_incl_waits": 16.1,
+      "seconds_waiting_rate_limit": 12.5,
+      "seconds_model_answering": 3.6,
+      "seconds_other (tools, guards, database)": 6.5,
       "alert": "ACCEPTED",
       "model_calls": 3,
-      "input_tokens": 5229,
-      "output_tokens": 1514
+      "models": [
+        "openai/gpt-oss-120b"
+      ],
+      "input_tokens": 5205,
+      "output_tokens": 1391,
+      "cost_usd": 0.001615
+    },
+    {
+      "seconds_total": 24.8,
+      "seconds_in_model_calls_incl_waits": 21.0,
+      "seconds_waiting_rate_limit": 17.5,
+      "seconds_model_answering": 3.5,
+      "seconds_other (tools, guards, database)": 3.8,
+      "alert": "ACCEPTED",
+      "model_calls": 3,
+      "models": [
+        "openai/gpt-oss-120b"
+      ],
+      "input_tokens": 5207,
+      "output_tokens": 1406,
+      "cost_usd": 0.001625
+    },
+    {
+      "seconds_total": 19.5,
+      "seconds_in_model_calls_incl_waits": 15.5,
+      "seconds_waiting_rate_limit": 11.0,
+      "seconds_model_answering": 4.5,
+      "seconds_other (tools, guards, database)": 4.0,
+      "alert": "ACCEPTED",
+      "model_calls": 3,
+      "models": [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b"
+      ],
+      "input_tokens": 5207,
+      "output_tokens": 1381,
+      "cost_usd": 0.001416
     }
   ],
   "recovery": {
-    "median_seconds": 34.6,
-    "mean_input_tokens": 5222,
-    "mean_output_tokens": 1506,
-    "cost_usd": 0.00169
+    "runs": 5,
+    "seconds_total": {
+      "min": 11.5,
+      "median": 22.6,
+      "max": 35.0
+    },
+    "median_seconds_model_answering": 3.6,
+    "median_seconds_waiting_rate_limit": 11.0,
+    "median_seconds_other": 6.5,
+    "mean_input_tokens": 5200,
+    "mean_output_tokens": 1379,
+    "mean_cost_usd": 0.001568
   },
   "burst": {
     "requests": 12,
-    "seconds": 17.9,
+    "seconds": 10.6,
     "decisions": {
       "AUTO": 4,
       "PAUSED": 3,
@@ -47,20 +122,46 @@
       "REJECTED": 1,
       "ERROR": 0
     },
-    "median_request_seconds": 1.39,
+    "median_request_seconds": 0.56,
     "model_calls": 13,
     "failed_calls_recovered": 3,
-    "mean_input_tokens": 401,
-    "mean_output_tokens": 50,
-    "cost_per_request_usd": 9e-05,
-    "median_model_latency_ms": 234.0
+    "requests_that_needed_no_model": 2,
+    "mean_input_tokens_per_call": 319,
+    "mean_output_tokens_per_call": 51,
+    "tokens_per_request": 308,
+    "cost_per_request_usd": 6.2e-05,
+    "median_model_latency_ms": 221.0
   },
   "pilot_month": {
-    "assumption_per_day": {
-      "recoveries": 30,
-      "inbox_requests": 500
+    "assumption": {
+      "inbox_requests_per_day": 500,
+      "recoveries_per_day": 30,
+      "llm_cost_per_day_usd": 0.078,
+      "llm_cost_per_month_usd": 2.35,
+      "tokens_per_day": 351519
     },
-    "llm_cost_per_day_usd": 0.096,
-    "llm_cost_per_month_usd": 2.87
+    "x10": {
+      "inbox_requests_per_day": 5000,
+      "recoveries_per_day": 300,
+      "llm_cost_per_day_usd": 0.782,
+      "llm_cost_per_month_usd": 23.47,
+      "tokens_per_day": 3515187
+    }
+  },
+  "safety_cases": {
+    "auto": {
+      "req": "REQ-S1",
+      "decision": "AUTO"
+    },
+    "pause": {
+      "req": "REQ-S2",
+      "decision": "PAUSED"
+    },
+    "attack": {
+      "req": "REQ-S3",
+      "decision": "BLOCKED"
+    },
+    "pause_safe_default": "EXPIRED",
+    "state_unchanged": true
   }
 }

@@ -31,7 +31,7 @@ flight's captain has just reported fatigue.
 Today, controllers fix this by phone, across separate systems, with a 25-minute deadline. The usual fallback is to
 put everyone on tomorrow's flight. That costs AED 133,390 in compensation and care, and nobody arrives the same day.
 
-AeroTurn recovers it in under a minute: 45 of 45 arrive the same day, 10 of 10 vulnerable passengers are protected,
+AeroTurn produces a legal recovery plan in seconds (12–35 s measured): 45 of 45 arrive the same day, 10 of 10 vulnerable passengers are protected,
 and the cost falls by 62%.
 
 ## Slide 3 · What makes us different · B (1:10–1:55)

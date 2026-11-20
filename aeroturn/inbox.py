@@ -73,6 +73,7 @@ args by intent:
  change_gate: {"flight": "EK000", "gate": "C31"}
  swap_crew: {"flight": "EK000", "remove_crew_id": "C-B01", "add_crew_id": "S-04"}
  retime: {"flight": "EK000", "new_etd": "HH:MM"}
+A "stand" is a gate: moving or assigning a flight to a stand is change_gate.
 Copy IDs exactly as written. Never invent IDs. If unsure, use "unknown"."""
 
 
@@ -179,8 +180,14 @@ def process(conn: sqlite3.Connection, req: Request, client=None) -> dict:
         return done("BLOCKED", reason="; ".join(bad), provider="code only (never reached a model)")
     parsed, provider = understand(req.text, client)
     intent, args = parsed["intent"], parsed["args"]
-    out["intent"] = intent
     errs = validate(conn, intent, args)
+    if errs and client is not None:
+        # The model's reading failed validation: try the deterministic parser. Its reading is validated the same way.
+        alt = rule_parse(req.text)
+        if not validate(conn, alt["intent"], alt["args"]):
+            intent, args, errs = alt["intent"], alt["args"], []
+            provider = f"{provider} → rule parser (model reading failed validation)"
+    out["intent"] = intent
     if errs:
         return done("REJECTED", reason="; ".join(errs), provider=provider)
 

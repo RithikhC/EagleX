@@ -1,5 +1,8 @@
 # Round 3: 7-minute pitch and live demo (three speakers)
 
+Every number below is backed by [round3/NUMBERS_PROOF.md](round3/NUMBERS_PROOF.md): measured, from an official
+source, from the dataset, or stated as an assumption.
+
 The split follows each person's Round 1 role:
 
 | Speaker | Part | Time |
@@ -29,7 +32,8 @@ controller at a hub airport. Picture this: EK812 lands in Dubai 75 minutes late.
 - The crew is 20 minutes from its legal duty limit.
 - The next flight can't leave until a hydraulic defect is signed off.
 
-Today, sorting that out takes about 25 minutes of phone calls.
+The controller has 25 minutes to decide the arrival stand (until 15:15), while juggling separate systems for
+crew, maintenance and bookings.
 
 In Round 2, our agent already planned a legal recovery. But it started from a button on a preloaded scenario,
 used one model with a three-minute timeout, and we'd never tested load or measured cost. This morning we made it
@@ -55,8 +59,8 @@ atomic batches, vulnerable passengers first.
 
 *(When it finishes, point at the banner, the KPIs and the approval queue.)*
 
-**Rithikh:** The output: zero connections at risk, ten of ten vulnerable passengers protected, about 83 thousand
-dirhams saved, and three changes waiting for the controller. That's the full journey, from alert to a plan ready to
+**Rithikh:** The output: zero connections at risk, ten of ten vulnerable passengers protected, the compensation
+saving on the tile, and the changes waiting for the controller. That's the full journey, from alert to a plan ready to
 approve.
 
 *(🚦 Pilot console tab. Leave the 🐢 toggle on. Press **▶ Process 12 inbox requests**: about 15–25 s.)*
@@ -65,7 +69,7 @@ approve.
 request 5 we make the main model time out on purpose. Watch the messages: retry one, retry two, then "using the
 backup model", and it still completes.
 
-Twelve of twelve handled, no crash, about a second and a half per request:
+Twelve of twelve handled, no crash, about half a second per request when nothing fails:
 - 4 done automatically;
 - 3 waiting for a human;
 - 5 stopped: two attacks, two illegal requests caught by the rules, and one with an unknown passenger ID.
@@ -95,27 +99,32 @@ log evidence. The rule is simple: the model can only suggest, and code decides w
 
 ## 5:30–6:30 · Reuben · deployment, cost, limitations (slides 7–9)
 
-**Reuben:** So what does a pilot take? The users are the six to ten controllers on each shift. The airline's
-operations IT team runs it, and the safety team owns the rule file. It runs on the airline's cloud server, or fully
-on-premise with an open model. Monitoring watches the fallback rate, timeouts, latency and blocked counts, and
-raises an alert if the audit chain or the rule fingerprint ever breaks.
+**Reuben:** So what does a pilot take? The users are the duty controllers on each shift; the team size is
+something we'd confirm with the airline. The airline's operations IT team runs it, and the safety team owns the rule
+file. It runs on the airline's cloud server, or fully
+on-premise with an open model. Today the Pilot console shows timeouts, retries, backup use, latency and blocked
+counts, and the header shows whether the audit chain and the rule fingerprint are intact. In a pilot, those become
+alerts.
 
-The cost is measured, not guessed:
-- an inbox request uses about 450 tokens: 0.009 US cents;
-- a full recovery about 6,700 tokens: 0.17 US cents.
+The cost is measured, not guessed. We count the tokens Groq reports and multiply them by Groq's published price:
+- an inbox request uses about 300 tokens: 0.006 US cents;
+- a full recovery about 6,600 tokens: 0.16 US cents.
 
-At 500 requests and 30 recoveries a day, that's about three US dollars a month in tokens. The free tier covers a
-demo but not a pilot.
+The volume is an assumption we'd check in shadow mode: at 500 requests and 30 recoveries a day, that's about 2.35
+US dollars a month in tokens, or about 23 dollars at ten times that. Our free account allows 8,000 tokens a
+minute, which is roughly one recovery a minute, so a pilot needs a paid tier.
 
 What isn't done yet:
 - the data is synthetic, and there are no live airline feeds yet;
 - the crew rules are a simplified EASA model, not GCAA-certified;
-- on the free tier a full run takes 20 to 60 seconds, because of rate limits.
+- a full recovery took 12 to 35 seconds in our tests, run back to back: about 4 seconds of that is the model, and
+up to 18 seconds is waiting for the free-tier rate limit.
 
 ## 6:30–7:00 · Reuben · value and trade-offs (slide 10)
 
-**Reuben:** The value: a legal recovery plan in under a minute instead of 25, compensation and care down from 133
-thousand to 50 thousand dirhams, every vulnerable passenger protected, and zero rule breaches.
+**Reuben:** The value: a legal recovery plan in 12 to 35 seconds, well inside the 25-minute decision window;
+compensation and care down from 133 thousand to 50 thousand dirhams in our cost model; every vulnerable passenger
+protected; and no rule broken in 116 tests, 13 edge cases and 5 curveballs.
 
 Our trade-offs:
 - a few large model calls instead of a chatty loop, for cost and rate limits;
@@ -147,8 +156,9 @@ Four layers catch it:
 Illegal proposals go back to the model to correct, and the code autopilot finishes any step it misses.
 
 **Why this model or provider, and what's the trade-off?** (Rithikh)
-Groq gpt-oss-120b: strong reasoning, about one second per call, open weights (so it can move on-premise), and
-about 0.17 cents per recovery. The trade-off is the free-tier rate limit, which is why full runs take 20–60 s. We
+Groq gpt-oss-120b: strong reasoning, open weights (so it can move on-premise), a median of 0.2 s per small call
+and about 4 s of model time per recovery, and about 0.16 US cents per recovery at Groq's published price. The
+trade-off is the free tier's 8,000 tokens per minute: back-to-back recoveries waited up to 18 s for it. We
 use plan-and-execute (2–3 large calls, not 20 small ones) and keep a smaller backup model.
 
 **How does the agent keep track of state between steps?** (Rithikh)
@@ -161,7 +171,7 @@ The model's rate limit (tokens per minute), then SQLite's single writer.
 - Rate limit: a paid tier or an on-premise model, plus a queue.
 - Database: Postgres with the same transactions.
 
-The guards and tools don't change. Load today: 12 requests in about 18 s.
+The guards and tools don't change. Load today: 12 requests in about 11 s.
 
 **How would you stop someone misusing the approval step?** (Fawwaz)
 - Approval is not a tool, so the AI can't call it.
@@ -174,11 +184,14 @@ The guards and tools don't change. Load today: 12 requests in about 18 s.
 For a real pilot: single sign-on and role-based permissions.
 
 **What would it cost to run for a month, and how did you work that out?** (Reuben)
-Measured tokens × Groq's list price (US$ 0.15 per million input tokens, 0.60 per million output):
-- about US$ 0.00009 per inbox request and US$ 0.0017 per recovery;
-- × (500 requests + 30 recoveries a day) × 30 days ≈ US$ 3 a month in tokens, plus one small server.
+Measured tokens × Groq's published price (US$ 0.15 per million input tokens, 0.60 per million output, from
+Groq's model page):
+- about US$ 0.00006 per inbox request and US$ 0.0016 per recovery;
+- × an assumed 500 requests + 30 recoveries a day × 30 days ≈ US$ 2.35 a month in tokens (about US$ 23 at 10×),
+  plus hosting.
 
-The script `scripts/round3_evidence.py` reproduces the numbers.
+The volume is the assumption, and shadow mode would measure it. `scripts/round3_evidence.py` reproduces every other
+number; the proof sheet is `docs/round3/NUMBERS_PROOF.md`.
 
 ## Rehearsal tips
 
