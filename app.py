@@ -17,10 +17,29 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from aeroturn import (agent, audit, config, costs, crew, curveballs, db, edge_cases, faults, guards, hitl, lab, llm, narrative,
-                      reconcile, recovery, sanitize, tools, turnaround)
-from aeroturn.facts import pax_facts
-from aeroturn.timeutil import dur, hm, minutes, parse
+
+def _fresh_package() -> None:
+    """Streamlit re-runs app.py on every interaction but keeps imported modules. After a deploy (git pull) the
+    package source changes on disk; drop the old aeroturn modules so this run imports the new code."""
+    import hashlib
+    import sys
+    pkg = Path(__file__).with_name("aeroturn")
+    stamp = hashlib.sha1("".join(f"{p.name}:{p.stat().st_mtime_ns}:{p.stat().st_size}"
+                                 for p in sorted(pkg.glob("*.py"))).encode()).hexdigest()
+    old = sys.modules.get("aeroturn")
+    if old is not None and getattr(old, "_code_stamp", None) != stamp:
+        for name in [m for m in sys.modules if m == "aeroturn" or m.startswith("aeroturn.")]:
+            del sys.modules[name]
+    import aeroturn
+    aeroturn._code_stamp = stamp
+
+
+_fresh_package()
+
+from aeroturn import (agent, audit, config, costs, crew, curveballs, db, edge_cases, faults, guards,  # noqa: E402
+                      hitl, lab, llm, narrative, reconcile, recovery, sanitize, tools, turnaround)
+from aeroturn.facts import pax_facts  # noqa: E402
+from aeroturn.timeutil import dur, hm, minutes, parse  # noqa: E402
 
 st.set_page_config(page_title="AeroTurn OCC", page_icon="✈️", layout="wide", initial_sidebar_state="collapsed")
 
