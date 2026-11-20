@@ -44,7 +44,10 @@ Escalations are idempotent per (topic, reason) and recorded in the hash-chained 
                                  guards re-run (fresh)
                               ┌────────────┴────────────┐
                     BLOCKED_AT_APPROVAL         APPROVED → applied atomically
-                    (stays PENDING)
+                    (stays PENDING)              (only if the state hash still matches what
+                                                  the controller saw, else STALE → re-staged)
+              two-step: approve(execute=False) → AUTHORISED (bound to state hash)
+                        execute_approved() → hash recomputed → APPROVED, or STALE → re-staged
                                      hitl.reject → REJECTED
                     reconcile: no longer legal / superseded → WITHDRAWN
 ```
@@ -67,6 +70,17 @@ BEGIN IMMEDIATE
 COMMIT                            ← deferred FK bag_routing → bookings
 on any exception: ROLLBACK; fingerprint_after == fingerprint_before
 ```
+
+Every bag is decided inside the same savepoint as its owner's seat: if the bag can reach the new flight
+(transfer belt at on-blocks + chocks + offload = 33 min, then the 45-min bag MCT) it moves with the passenger;
+otherwise (BAG-003) it is removed from the flight and written to `bag_plans` on the next flight it can make,
+screened as unaccompanied baggage, with a delivery note. With no such flight, the transaction rolls back.
+
+**Batched mode** (what the agent uses, `batch_size=10`): batch 1 = every PNR group with a P1/P2 passenger, then
+batches of up to 10 passengers (PNR groups never split). Each batch is the transaction above, so a failure in
+batch 3 never undoes batches 1–2. A failed batch is re-planned against fresh inventory (seats already planned for
+later batches are reserved) and retried once; if it fails again its passengers are escalated to the controller
+and the next batch runs. Result: COMMITTED, PARTIAL or ROLLED_BACK.
 
 ## 4. Priority model
 

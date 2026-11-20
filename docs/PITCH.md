@@ -19,8 +19,14 @@ every slide). This file is the talk track and the judge Q&A. The arithmetic behi
    - P1–P4 vulnerable priority
    - Passenger-specific MCT
    - PPBM
-5. **Atomic recovery.** One transaction for 45 passengers and 48 bags, with 4 protection layers. A mid-way
-   failure leaves 0 double bookings, 0 orphaned bags and an identical state hash.
+5. **Atomic recovery.** Vulnerable passengers first in their own transaction, then batches of 10, each with 4
+   protection layers. A failure rolls back only its batch (identical state hash, 0 double bookings, 0 orphaned
+   bags), which is re-planned and retried or handed to the controller. Every bag gets a plan in the same
+   transaction as its owner's seat: 46 of 48 travel with their owners, 2 follow on the next flight with a
+   delivery note.
+5b. **The organisers' 5 curveballs pass live** (🎯 Curveballs tab): batched transactions with a seat conflict in
+   batch 3, a "crew agree to extend" message, a forged maintenance sign-off, a bag that can't make a 35-minute
+   connection, and an approval that goes stale before it runs.
 6. **Human in the loop that cannot be rubber-stamped.** Changes are staged with justification, guards re-run at
    approval, decisions have deadlines, and the agent cannot approve.
 7. **Data & evidence.**
@@ -52,7 +58,7 @@ every slide). This file is the talk track and the judge Q&A. The arithmetic behi
 | Same-day arrivals | 45/45 (legacy 0/45) |
 | Unconstrained plan | blocked: 15 violations across PAX-001/002/003/004/006 |
 | Edge cases (world changes after the plan) | 13/13 pass, 67/67 checks: 9 resolved automatically, 4 escalated |
-| Tests | 86 passing |
+| Tests | 102 passing (incl. 5 curveballs, 13 edge cases) |
 
 ## Anticipated judge questions
 

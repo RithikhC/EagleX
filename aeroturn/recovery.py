@@ -182,13 +182,16 @@ def _group_sort_key(members: list[guards.PaxFacts], original_std: str) -> tuple:
 # Planner
 # ---------------------------------------------------------------------------
 def plan_recovery(conn: sqlite3.Connection, *, objective: str = "earliest_arrival", created_by: str = "AGENT",
-                  persist: bool = True) -> dict:
+                  persist: bool = True, only: set[str] | None = None,
+                  reserved: set[tuple[str, str]] | None = None) -> dict:
+    """Priority-protected plan. ``only`` limits it to some passengers (re-planning one failed batch);
+    ``reserved`` seats (flight_id, seat_no) are held for batches that have not run yet and are never offered."""
     if objective not in OBJECTIVES:
         objective = "earliest_arrival"
     basis = arrival_basis(conn)
     eibt, remote = basis["eibt"], basis["remote"]
     risk = connection_risk(conn)
-    at_risk = [p for p in risk["passengers"] if p["at_risk"]]
+    at_risk = [p for p in risk["passengers"] if p["at_risk"] and (only is None or p["pax_id"] in only)]
     prow = {r["pax_id"]: r for r in db.rows(conn, "SELECT * FROM passengers")}
     bags = bag_counts(conn)
     bag_tags: dict[str, list[str]] = {}
@@ -203,6 +206,8 @@ def plan_recovery(conn: sqlite3.Connection, *, objective: str = "earliest_arriva
     flights = {d: candidate_flights(conn, d, eibt) for d in dests}
     all_ids = [f["flight_id"] for fl in flights.values() for f in fl]
     inventory = free_seats(conn, all_ids)
+    if reserved:
+        inventory = {fid: [s for s in seats if (fid, s["seat_no"]) not in reserved] for fid, seats in inventory.items()}
     inv_hash = hashlib.sha256(json.dumps({k: [s["seat_no"] for s in v] for k, v in sorted(inventory.items())})
                               .encode()).hexdigest()[:16]
     start_counts = free_counts(inventory)

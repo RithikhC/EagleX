@@ -319,6 +319,13 @@
    "transfer_penalty_min": 0
   },
   {
+   "gate_id": "B7",
+   "concourse": "B",
+   "kind": "CONTACT",
+   "taxi_min": 5,
+   "transfer_penalty_min": 0
+  },
+  {
    "gate_id": "B19",
    "concourse": "B",
    "kind": "CONTACT",

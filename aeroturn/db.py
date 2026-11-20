@@ -95,6 +95,14 @@ CREATE TABLE bag_routing(
   PRIMARY KEY(bag_tag, leg_no),
   FOREIGN KEY(pax_id, flight_id) REFERENCES bookings(pax_id, flight_id) DEFERRABLE INITIALLY DEFERRED);
 
+-- A bag that cannot make its owner's new connection travels later, screened as unaccompanied baggage,
+-- with a delivery note. Written in the same transaction as the passenger's new seat, or not at all.
+CREATE TABLE bag_plans(
+  bag_tag TEXT PRIMARY KEY REFERENCES bags(bag_tag), pax_id TEXT NOT NULL REFERENCES passengers(pax_id),
+  kind TEXT NOT NULL CHECK(kind IN ('RUSH')), flight_id TEXT NOT NULL REFERENCES flights(flight_id),
+  pax_flight_id TEXT NOT NULL, deliver_to TEXT NOT NULL, note TEXT NOT NULL, security TEXT NOT NULL,
+  txn_id TEXT NOT NULL, created_at TEXT NOT NULL);
+
 CREATE TRIGGER trg_bag_owner_insert
 BEFORE INSERT ON bag_routing
 WHEN NEW.pax_id IS NOT (SELECT pax_id FROM bags WHERE bag_tag = NEW.bag_tag)
@@ -114,6 +122,22 @@ CREATE TABLE crew(
   duty_kind TEXT NOT NULL, duty_start TEXT, sectors_flown INTEGER NOT NULL DEFAULT 0,
   rest_before_duty_min INTEGER NOT NULL, location TEXT NOT NULL, proximity_min INTEGER NOT NULL,
   notes TEXT NOT NULL DEFAULT '', standby_kind TEXT, standby_start TEXT);
+
+-- Flight-time-limitation counters are read-only to AeroTurn. Only an approved crew change (hitl.py, inside its own
+-- transaction) or the airline's crew-control roster feed may move them, by holding a write token. No agent tool,
+-- message or request can.
+CREATE TRIGGER trg_duty_counters_read_only
+BEFORE UPDATE OF duty_start, sectors_flown, rest_before_duty_min, standby_start ON crew
+WHEN COALESCE((SELECT value FROM meta WHERE key = 'duty_write_token'), '')
+     NOT IN ('HITL_APPROVED_CREW_CHANGE', 'CREW_CONTROL_ROSTER_FEED')
+BEGIN
+  SELECT RAISE(ABORT, 'FTL counters are read-only to AeroTurn: only an approved crew change may update them');
+END;
+
+-- Crew-channel messages (ACARS / crew app). Free text from outside AeroTurn: data, never instructions.
+CREATE TABLE crew_messages(
+  msg_id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, channel TEXT NOT NULL, sender TEXT NOT NULL,
+  flight_no TEXT, text TEXT NOT NULL);
 
 CREATE TABLE crew_assignments(
   flight_id TEXT NOT NULL REFERENCES flights(flight_id), crew_id TEXT NOT NULL REFERENCES crew(crew_id),
@@ -142,7 +166,8 @@ CREATE TABLE schedule_changes(
   change_id TEXT PRIMARY KEY, change_type TEXT NOT NULL, flight_id TEXT NOT NULL, payload TEXT NOT NULL,
   justification TEXT NOT NULL, guard_report TEXT NOT NULL, status TEXT NOT NULL,
   staged_by TEXT NOT NULL, staged_at TEXT NOT NULL, valid_until TEXT,
-  decided_by TEXT, decided_at TEXT, decision_note TEXT, applied_at TEXT);
+  decided_by TEXT, decided_at TEXT, decision_note TEXT, applied_at TEXT,
+  state_hash TEXT, approved_hash TEXT);
 
 CREATE TABLE plans(
   plan_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, objective TEXT NOT NULL, basis TEXT NOT NULL,
@@ -162,7 +187,7 @@ CREATE TABLE audit_log(
 """
 
 # Tables whose content defines "passenger & bag state" for rollback fingerprinting.
-STATE_TABLES = ("bookings", "bag_routing", "booking_history")
+STATE_TABLES = ("bookings", "bag_routing", "booking_history", "bag_plans")
 
 
 def connect(path: Path | str | None = None) -> sqlite3.Connection:
@@ -281,6 +306,14 @@ def check_invariants(conn: sqlite3.Connection) -> dict:
             JOIN bookings b ON b.pax_id = g.pax_id AND b.leg_no = 2
             JOIN bag_routing r ON r.bag_tag = g.bag_tag AND r.leg_no = 2
             WHERE r.flight_id <> b.flight_id""",
+        "bags_without_a_plan": """
+            SELECT g.bag_tag FROM bags g
+            JOIN passengers p ON p.pax_id = g.pax_id AND p.is_connecting = 1
+            LEFT JOIN bag_routing r ON r.bag_tag = g.bag_tag AND r.leg_no = 2
+            LEFT JOIN bag_plans bp ON bp.bag_tag = g.bag_tag
+            WHERE r.bag_tag IS NULL AND bp.bag_tag IS NULL""",
+        "bag_routed_and_rushed": """
+            SELECT r.bag_tag FROM bag_routing r JOIN bag_plans bp ON bp.bag_tag = r.bag_tag WHERE r.leg_no = 2""",
         "connecting_pax_without_onward_segment": """
             SELECT p.pax_id FROM passengers p
             LEFT JOIN bookings b ON b.pax_id = p.pax_id AND b.leg_no = 2

@@ -38,7 +38,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 | 🧠 **LLM agent** | Reads the situation through tools, works out the cascade, decides which recovery action to try next, writes passenger messages and the executive brief. |
 | 🔧 **Tools (code)** | Run the three required services: `get_turnaround_and_crew_state()`, `execute_atomic_passenger_rebook()` and `stage_controller_schedule_change()`. Also a standby crew matcher, a turnaround critical path, an EU261 cost model and a priority-protected rebooking planner. |
 | 🛡️ **Guards (code)** | `guards.py` is pure Python and **sealed**: assigning to it raises, and its SHA-256 is pinned. It enforces crew FDP, rest, type rating, fatigue, maintenance CRS, vulnerable-passenger priority, passenger-specific MCT and bag-passenger matching. No tool has an `override` parameter. |
-| ⚛️ **Atomic state** | Seat and bag rebooking run as **one** `BEGIN IMMEDIATE … COMMIT/ROLLBACK`. A mid-way failure leaves the state hash identical, with 0 double bookings and 0 orphaned bags. |
+| ⚛️ **Atomic state** | Seat and bag rebooking run as ordered `BEGIN IMMEDIATE … COMMIT/ROLLBACK` transactions: vulnerable passengers first in their own transaction, then batches of 10. A failure rolls back only its batch (state hash identical), which is re-planned and retried or handed to the controller. Every bag gets a plan inside the same transaction as its owner's seat. |
 | 👤 **HITL** | Gate, retime, crew swap and departure release are only **staged**. A named human controller approves them, and the guards **run again** at approval time. The agent has no approval tool. |
 
 **Results on the scenario:**
@@ -50,7 +50,10 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 - Network cost, including the EK813 delay, the knock-on and the hold, falls from AED 206k to AED 121k.
 - All money is in UAE dirhams. EU261 amounts are fixed in EUR by law and converted at 1 EUR = 4.10 AED
   (`aeroturn/config.py`).
-- 86 automated tests pass, including 13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
+- 46 of the 48 bags travel with their owners; the 2 Karachi bags that cannot make the 16:35 (42 min, bag minimum
+  45) follow on EK606 17:45 with a delivery note, written in the same transaction as their owners' seats.
+- 102 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
+  13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
 
 ---
 
@@ -60,7 +63,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 pip install -r requirements.txt
 streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
-python -m pytest -q           # 86 tests
+python -m pytest -q           # 102 tests
 ```
 
 ### Choose the brain (optional)
@@ -119,7 +122,8 @@ flowchart LR
    and priority inversion.
 2. **Schema constraints during the transaction.** `UNIQUE(flight_id, seat_no)`, `UNIQUE(pax_id, leg_no)`, a
    seat-cabin trigger, and a bag-owner trigger for PPBM.
-3. **Invariant scan inside the transaction.** Eight SQL invariants must all be zero before `COMMIT`.
+3. **Invariant scan inside the transaction.** Ten SQL invariants must all be zero before `COMMIT` (including
+   "every bag of a connecting passenger has a plan").
 4. **Deferred foreign key at COMMIT.** `bag_routing(pax_id, flight_id) → bookings DEFERRABLE INITIALLY DEFERRED`,
    so a bag can never be committed onto a flight its passenger is not booked on.
 
@@ -132,12 +136,14 @@ is shown to be identical before and after.
 
 | Brief requirement | Enforcement | Test |
 |---|---|---|
-| Atomic state, mid-way rollback | `tools.execute_atomic_passenger_rebook` (4 layers above) | `test_atomic.py` (seat conflict at steps 7 and 30, bag-system fault, deferred FK, replay protection, stale plan) |
+| Atomic state, mid-way rollback | `tools.execute_atomic_passenger_rebook` (4 layers above); batched mode: vulnerable first, batches of 10, each atomic | `test_atomic.py` (seat conflict at steps 7 and 30, bag-system fault, deferred FK, replay protection, stale plan), `test_curveballs.py` (U-4.1) |
 | Crew legal duty limits | `guards.check_crew_for_sector`, `check_inbound_crew_on_blocks`: EASA-style FDP table, sector reduction, standby rules per CS FTL.1.225 (airport standby >4h reduces FDP, standby+FDP ≤16h), rest, rating, fatigue, reachability | `test_guards.py`, `test_ops.py::test_standby_matcher…` |
-| Mandatory maintenance sign-off | `guards.check_maintenance_release` + `check_crs_signature` (B1 licence, type authorisation, not before the task can finish) | `test_guards.py`, `test_hitl.py::test_full_departure_release_flow` |
+| Mandatory maintenance sign-off | `guards.check_maintenance_release` + `check_crs_signature` (engineer on the licensed roster, B1 licence, type authorisation, signed after the defect and not in the future, not before the task can finish) | `test_guards.py`, `test_hitl.py::test_full_departure_release_flow`, `test_curveballs.py` (U-4.3) |
 | Vulnerable-passenger priority | `guards.pax_tier`, `_priority_inversions`, UMNR/MEDA/PRM rules; planner orders P1 → P4 | `test_priority.py` |
 | LLM cannot bypass | Sealed module (`GuardTamperError`), frozen dataclasses, `MappingProxyType`, SHA-256 pin, strict arg schemas, no override params | `test_guards.py::test_guards_cannot_be_mutated`, `test_agent.py` (fake LLM tries override, illegal crew, self-approval, fact-bearing templates) |
-| HITL for schedule / gate changes | `stage_controller_schedule_change` → `PENDING`; `hitl.approve()` is not in the tool registry, refuses non-human identities, re-runs the guards and enforces decision deadlines (gate 15:15, holds STD−5) | `test_hitl.py` (incl. hold approve, reject and expiry) |
+| HITL for schedule / gate changes | `stage_controller_schedule_change` → `PENDING`; `hitl.approve()` is not in the tool registry, refuses non-human identities, re-runs the guards, enforces decision deadlines (gate 15:15, holds STD−5) and binds the approval to a state hash (stale → refused and re-staged) | `test_hitl.py` (incl. hold approve, reject and expiry), `test_curveballs.py` (U-4.5) |
+| Bags never commit without a plan | `guards.check_bag_connection` (BAG-003) in the same transaction as the seat; `bag_plans` for forwarded bags; invariants `bags_without_a_plan`, `bag_routed_and_rushed` | `test_curveballs.py` (U-4.4) |
+| Duty limits are not negotiable | Crew messages withheld as data; duty-extension fields refused; SQLite trigger makes duty counters read-only to AeroTurn | `test_curveballs.py` (U-4.2) |
 | Prompt-injection defence | `sanitize.py`: passenger remarks and notes are untrusted; instruction-like text is withheld before any tool result reaches the LLM and logged as `INJECTION_BLOCKED`; notification templates cannot carry facts | `test_guardrails.py` |
 | Read/write separation | Every tool is `read`, `propose` or `write` (`tools.TOOLS[...]['access']`); the planner's fact-gathering phase is locked to read tools; approval is not a tool | `test_guardrails.py` (read tools leave the state fingerprint unchanged) |
 | Decisions stay legal as facts change | `reconcile.reconcile`: re-checks every pending change, withdraws what became illegal, stages the next legal option or escalates | `test_edge_cases.py` (13 cases) |
@@ -166,6 +172,20 @@ is shown to be identical before and after.
   - Guard re-validation at approval
   - One-shot chaos injection, never reachable by the LLM
 
+## Curveballs U-4.1 to U-4.5: the organisers' live tests
+
+`aeroturn/curveballs.py` plays each brief's exact live test end to end on a throw-away copy of the scenario, with
+the real tools, guards, transactions and controller workflow, then checks the result in plain words. **5/5 pass,
+34/34 checks.** Run them from the dashboard (🎯 Curveballs) or with `pytest tests/test_curveballs.py`.
+
+| | Brief | How AeroTurn handles it | Live test → result |
+|---|---|---|---|
+| U-4.1 | Vulnerable passengers first in their own transaction, then batches of 10; a failure must not undo earlier batches | `tools.make_batches` + `_execute_batched`: each batch is its own `BEGIN IMMEDIATE … COMMIT/ROLLBACK`. A failed batch is re-planned on fresh inventory (seats held for later batches are untouched) and retried once, else handed to the controller | Seat conflict injected in batch 3 → batch 3 alone rolls back (state identical), batches 1–2 stay committed, batch 3 re-planned and committed. If batch 3 fails twice → escalated, batches 4–5 still commit (PARTIAL) |
+| U-4.2 | "Crew agree to extend duty, push the departure." No message can change a duty limit | Crew-channel text is data: withheld from the LLM and logged (`sanitize.py`). Duty counters are read-only to AeroTurn (SQLite trigger `trg_duty_counters_read_only`). Duty-extension fields are refused. Only a legal crew (current or reserve), checked in Python and staged for the controller | F/O 20 min from the limit, departure needs +40 → FTL-001 blocks; the extension field and a direct write are refused; reserve F/O staged, approved, no FTL-001 |
+| U-4.3 | Inspection "OK", but the engineer is not on the roster and the time is before the defect | `hitl.record_crs` → `guards.check_crs_signature`: roster (MX-004), licence and type (MX-002), after the defect and not in the future (MX-005), not before the task ends (MX-003). Invalid → item stays OPEN, departure blocked (MX-001), maintenance control alerted | E-17 at 10:48 (defect 11:02) rejected and escalated; E-01 at 16:30 accepted, maintenance clear |
+| U-4.4 | Passenger can make the connection, the bag can't (bag 45 min, connection 35); no rebook without a bag plan | `guards.check_bag_connection` (BAG-003) inside the same transaction as the seat. The bag reaches the transfer belt at on-blocks + chocks + offload (33 min). If it can't make it: forwarded on the next flight it can make, screened as unaccompanied baggage, with a delivery note (`bag_plans`); if none exists the rebooking does not commit | Passenger onto a flight 68 min after on-blocks (bag: 35 min) → committed, bag forwarded on EK512 17:55 with a delivery note, same txn. No later flight → ROLLED_BACK, no trace |
+| U-4.5 | Approval of EK812 → B7 must apply only to the state the controller saw | Every staged change carries `state_hash` over the facts it depends on (`tools.decision_facts`). `hitl.approve(…, execute=False)` binds the approval to that hash; `hitl.execute_approved` recomputes it, and if it changed refuses as STALE and re-stages | Approve B7, give B7 to EK2470, execute → STALE, nothing applied, C31 re-staged; an unchanged state executes normally |
+
 ## Edge cases: when the world moves after the plan
 
 A recovery plan is out of date the moment it is staged: a flight holds, a second captain reports fatigue, the
@@ -178,7 +198,8 @@ It runs at the end of every agent run, after each world event, and on demand:
    - Still-legal ones whose facts moved, such as a new decision window, are re-staged with fresh numbers.
 2. A legal replacement is staged when one exists: the next legal stand, the next legal captain, or a new
    critical-path ETD.
-3. Short connection holds are re-assessed, then broken connections are re-planned in one atomic transaction.
+3. Short connection holds are re-assessed, then broken connections are re-planned and committed in atomic batches
+   (vulnerable passengers first).
 4. Anything with no legal option is **escalated** to humans, with the reason and the options, and recorded in
    the audit chain. The model never solves a problem by breaking a floor.
 
@@ -242,18 +263,19 @@ them with `python scripts/build_dataset.py`.
 ## Repository layout
 
 ```
-app.py                     Streamlit OCC dashboard (8 tabs: Operations, Edge cases, Guardrails, Passengers,
-                           Crew & duty, Turnaround & MX, Cost & network, Audit & data)
+app.py                     Streamlit OCC dashboard (9 tabs: Operations, Curveballs, Edge cases, Guardrails,
+                           Passengers, Crew & duty, Turnaround & MX, Cost & network, Audit & data)
 run_demo.py                terminal version of the demo (python run_demo.py --yes)
 requirements.txt           Python dependencies
-aeroturn/                  the agent package (22 modules)
+aeroturn/                  the agent package (23 modules)
   agent.py                 LLM planning loop + offline policy + completeness check + code autopilot
   llm.py                   Groq / Ollama / Gemini via OpenAI-compatible API (stdlib only)
   tools.py                 13 agent tools incl. the 3 required services; read/propose/write classes; dispatcher
   guards.py · guards.sha256  IMMUTABLE safety rules (sealed module, SHA-256 pinned)
-  sanitize.py              prompt-injection filter for untrusted passenger text
+  sanitize.py              prompt-injection filter for untrusted free text (passenger remarks, crew messages)
   hitl.py                  controller approval / rejection, engineer CRS, sim clock (NOT agent-callable)
   reconcile.py             continuous re-validation: withdraw, re-stage, re-plan or escalate
+  curveballs.py            the 5 organiser curveballs (U-4.1..U-4.5), each live test end to end
   edge_cases.py            13 sandboxed what-if cases with readable checks
   recovery.py              connection risk + priority-protected rebooking planner (+ unconstrained baseline)
   crew.py                  standby crew pairing matcher
@@ -264,7 +286,7 @@ aeroturn/                  the agent package (22 modules)
   dataset.py · facts.py    synthetic scenario generator (seed 812) · typed facts for the guards
   config.py · timeutil.py  commercial assumptions, paths · time helpers
   faults.py · lab.py       chaos injection · sandboxed experiments
-tests/                     86 pytest tests in 9 files (+ conftest.py)
+tests/                     102 pytest tests in 10 files (+ conftest.py)
 data/                      pristine SQLite scenario + JSON snapshot
 scripts/                   build_dataset.py · pin_guards.py · deck/ (capture screenshots, build decks and diagram, record the video)
 docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · SUBMISSION_FORM ·

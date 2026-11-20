@@ -66,8 +66,9 @@ def brief_facts(conn: sqlite3.Connection) -> dict:
                                for ch in changes],
         "awaiting_controller": [f"{ch['change_type']} {_fmt_details(json.loads(ch['payload']))}"
                                 for ch in changes if ch["status"] == "PENDING"],
-        "executed_atomically": ([f"rebooked {len(rebooked)} passengers with their bags in one transaction "
-                                 f"(transactions: {', '.join(t['outcome'] for t in txns)})"] if rebooked else [])
+        "executed_atomically": ([f"rebooked {len(rebooked)} passengers with their bags in atomic transactions, "
+                                 f"vulnerable passengers first (transactions: {', '.join(t['outcome'] for t in txns)})"]
+                                if rebooked else [])
                                + ([f"{notes} passenger notifications sent"] if notes else []),
         "transactions": [t["outcome"] for t in txns],
         "guard_blocks": len(blocks),

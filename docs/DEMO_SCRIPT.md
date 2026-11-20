@@ -43,7 +43,9 @@ Talk over the incident banner and the event feed:
 - "Watch: the model proposed retiming to 16:30. The guard blocked it, TURN-001, because that's earlier than the
   critical path. The model corrected itself to 17:20. That's the separation: the LLM proposes, code decides
   what's legal."
-- "Chaos sold a seat mid-batch. Rollback, re-plan, commit: 45 passengers and 48 bags in one transaction."
+- "Chaos sold a seat mid-way. Only that batch rolled back; it was re-planned and committed. Vulnerable
+  passengers went first, in their own transaction, then batches of 10. Two Karachi bags can't make the 16:35, so
+  they follow on the 17:45 with a delivery note, in the same transaction as their owners' seats."
 
 KPIs flip to **0 CLEAR · 10/10 SAFE · 3 PENDING · about AED 83k SAVED**, and the map arcs turn green.
 
@@ -93,6 +95,15 @@ After the agent run, open **🌍 What if…** and click **Medical diversion take
 For the full catalogue, open the **🧪 Edge cases** tab and press **▶ Run all 13** (about 20 s): 13/13, 67/67
 checks, 9 resolved automatically, 4 escalated to humans. Open the EC-07 timeline to show the 3-minute EK346 hold
 that protects 10 passengers.
+
+### 🎯 Curveballs (60 s, the organisers' five live tests)
+
+Open the **🎯 Curveballs** tab and press **▶ Run all 5** (about 12 s): 5/5, 34/34 checks. Open a timeline or two:
+- **U-4.1** seat conflict in batch 3: batch 3 alone rolls back, batches 1–2 stay committed, batch 3 is re-planned.
+- **U-4.2** "Crew agree to extend duty": the message is withheld as data, FTL-001 holds, a reserve F/O is staged.
+- **U-4.3** forged sign-off (E-17, before the defect): rejected, maintenance control alerted; E-01 then signs.
+- **U-4.4** 35-minute bag connection: the passenger goes, the bag follows with a delivery note, same transaction.
+- **U-4.5** B7 approved, then taken by EK2470: execution refused as STALE, C31 re-staged.
 
 ## 4:45 · 🔧 Sign-off & release (40 s)
 

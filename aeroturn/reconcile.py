@@ -189,10 +189,12 @@ def reconcile(conn: sqlite3.Connection) -> dict:
         risk = recovery.connection_risk(conn)
     if risk["at_risk"]:
         p = tools.dispatch(conn, "plan_passenger_recovery", {"objective": "earliest_arrival"}, actor=ACTOR)
-        r = tools.dispatch(conn, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]}, actor=ACTOR)
+        r = tools.dispatch(conn, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"], "batch_size": 10},
+                           actor=ACTOR)
         if r.get("status") == "ROLLED_BACK":
             p = tools.dispatch(conn, "plan_passenger_recovery", {"objective": "earliest_arrival"}, actor=ACTOR)
-            r = tools.dispatch(conn, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]}, actor=ACTOR)
+            r = tools.dispatch(conn, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"], "batch_size": 10},
+                           actor=ACTOR)
         if r.get("status") != "NOOP":  # NOOP: only passengers with no legal seat today are left (escalated below)
             events.append(f"{risk['at_risk']} connection(s) at risk under in-block {hm(eibt)}: re-planning")
             events.append(f"rebooking {r.get('status')}: {r.get('summary', {}).get('rebooked', 0)} passenger(s)")

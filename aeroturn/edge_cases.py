@@ -248,7 +248,7 @@ def _baseline_note(run: Run) -> None:
     pend = _pending(run.conn)
     run.model("Starting point: the agent has already run. Staged for the controller: "
               + ", ".join(f"{c['change_type']} {c['payload'].get('new_gate') or c['payload'].get('add_crew_id') or c['payload'].get('new_etd') or c['flight_no']}"
-                          for c in pend) + "; 45 passengers rebooked in one transaction.")
+                          for c in pend) + "; passengers rebooked in atomic batches, vulnerable first.")
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ def ec01_atc_hold_15(run: Run) -> tuple[str, str]:
     run.check("Inbound crew still legal at C31, with 5 min margin", c31["legal"] and c31["crew_fdp_margin_min"] == 5,
               f"margin {c31['crew_fdp_margin_min']} min")
     n = (r["rebook"] or {}).get("rebooked", 0)
-    run.check("A fresh plan for 15:35 is committed in one transaction", (r["rebook"] or {}).get("status") == "COMMITTED",
+    run.check("A fresh plan for 15:35 is committed atomically", (r["rebook"] or {}).get("status") == "COMMITTED",
               f"{n} passengers")
     _nobody_dropped(run)
     left = len((r["rebook"] or {}).get("unresolved", []))
@@ -533,7 +533,7 @@ def ec13_hold_rejected(run: Run) -> tuple[str, str]:
     run.check("No connection left at risk", recovery.connection_risk(c)["at_risk"] == 0)
     run.check(f"{h['flight_no']} leaves on time: nobody on board is delayed",
               ek418["status"] != "HELD" and (ek418["etd"] in (None, ek418["std"])))
-    return f"Hold rejected; the {waiting} Sydney passengers move to the next flight in one transaction.", "resolved"
+    return f"Hold rejected; the {waiting} Sydney passengers move to the next flight atomically.", "resolved"
 
 
 CASES: list[Case] = [

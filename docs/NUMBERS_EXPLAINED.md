@@ -221,7 +221,12 @@ EK813 itself pays no EU261: it departs Dubai on a non-EU airline (Art. 3(1)).
 | 15 violations | The naive revenue-first plan: 11 vulnerable passengers served after less vulnerable ones (PAX-001), and one each of the minor, medical, connection-time and family-split rules |
 | 6 reverted, step 7 | In the rollback demo, the injected seat conflict hits the 7th booking; the 6 already written are undone |
 | 13 / 67 | Edge cases / checks; 9 resolved automatically, 4 escalated |
-| 86 | Automated tests |
+| 5 / 34 | Organiser curveballs U-4.1–U-4.5 / checks, all passing |
+| 102 | Automated tests |
+| 13 · 10 · 10 · 8 | Rebooking batches in the main run: batch 1 = the 10 vulnerable passengers plus their PNR groups (13), then batches of at most 10 |
+| 33 min | When a transfer bag reaches the transfer belt: 3 min chocks/GPU + 30 min hold offload (turnaround tasks ONB + OFFL) |
+| 45 min | Bag minimum connection time from the belt to the onward departure |
+| 42 min · 2 bags | EK812 on blocks 15:20 → bags on the belt 15:53 → EK602 to Karachi leaves 16:35: 42 < 45, so the 2 bags of the passengers rebooked on it follow on EK606 17:45 with a delivery note (the passengers themselves have 75 min ≥ their 60-min MCT) |
 
 Regenerate any of this yourself: `python run_demo.py --yes` prints every verdict, and the 💶 *Cost & network* tab
 shows the per-passenger table behind sections 5 and 6.

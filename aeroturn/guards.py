@@ -28,7 +28,15 @@ Regulatory basis (simplified, for the hackathon scenario):
     licensed (B1 for mechanical systems) and type-authorised engineer, signed
     no earlier than the end of the inspection task.
   * Positive Passenger-Bag Matching (ICAO Annex 17 PPBM): a bag may only be
-    routed on a flight its owner is booked on.
+    routed on a flight its owner is booked on. A bag that cannot make its
+    owner's new connection needs an explicit plan (a later flight, screened
+    as unaccompanied baggage, plus a delivery note) before the rebooking
+    may commit.
+  * A CRS from an outside system is validated, never trusted: the signatory
+    must be on the licensed-engineer roster and the signature must come after
+    the defect was raised and not in the future.
+  * Duty limits are not a parameter. No message, request field or approval
+    can extend them: the only legal path is a crew that is legal as rostered.
 """
 
 from __future__ import annotations
@@ -61,6 +69,8 @@ RULES: Final[Mapping[str, str]] = MappingProxyType({
     "MX-001": "Open dispatch-blocking maintenance item has no valid CRS",
     "MX-002": "CRS signatory lacks the required licence or type authorisation",
     "MX-003": "CRS cannot be signed before the inspection task can have been completed",
+    "MX-004": "CRS signatory is not on the licensed-engineer roster",
+    "MX-005": "CRS timestamp is impossible (before the defect was raised, or in the future)",
     "TURN-001": "Proposed off-blocks is earlier than the turnaround critical-path EOBT",
     "GATE-001": "Gate not available for the required time window",
     "NET-001": "Connection hold exceeds the network maximum hold",
@@ -76,6 +86,7 @@ RULES: Final[Mapping[str, str]] = MappingProxyType({
     "PAX-010": "Rebooked flight departs before the inbound aircraft is on blocks",
     "BAG-001": "Bag not routed with its passenger (PPBM / orphaned bag)",
     "BAG-002": "Bag minimum transfer time not met",
+    "BAG-003": "Bag cannot make its owner's new connection and has no forwarding plan",
     "HITL-001": "Gate / schedule / crew changes require Operations Controller approval",
 })
 
@@ -348,9 +359,21 @@ def required_licences(ata: str) -> frozenset[str]:
 
 
 def check_crs_signature(item: MxFacts, *, licence: str, type_auth: Sequence[str], aircraft_type: str,
-                        signed_at: datetime) -> Verdict:
-    """Validate a Certificate of Release to Service before it is recorded."""
+                        signed_at: datetime, on_roster: bool = True, raised_at: datetime | None = None,
+                        now: datetime | None = None, eng_id: str = "") -> Verdict:
+    """Validate a Certificate of Release to Service before it is recorded.
+
+    An "OK" from an inspection record is not enough: who signed and when are checked independently.
+    """
     v = []
+    if not on_roster:
+        v.append(Violation("MX-004", item.item_id,
+                           f"engineer ID '{eng_id}' is not on the licensed-engineer roster"))
+    if raised_at and signed_at <= raised_at:
+        v.append(Violation("MX-005", item.item_id,
+                           f"signed {signed_at:%H:%M}, but the defect was only raised at {raised_at:%H:%M}"))
+    if now and signed_at > now:
+        v.append(Violation("MX-005", item.item_id, f"signature time {signed_at:%H:%M} is in the future"))
     need = required_licences(item.ata)
     if licence not in need:
         v.append(Violation("MX-002", item.item_id,
@@ -361,7 +384,7 @@ def check_crs_signature(item: MxFacts, *, licence: str, type_auth: Sequence[str]
         v.append(Violation("MX-003", item.item_id,
                            f"inspection cannot be complete before {item.task_earliest_complete:%H:%M}; "
                            f"signature attempted at {signed_at:%H:%M}"))
-    return _verdict(v, [f"CRS validity for {item.item_id}"])
+    return _verdict(v, [f"CRS validity for {item.item_id}: roster, licence, type, defect time, task time"])
 
 
 def check_maintenance_release(items: Sequence[MxFacts], *, aircraft_type: str) -> list[Violation]:
@@ -609,6 +632,21 @@ def _priority_inversions(assignments: Sequence[Assignment], *, options: Mapping[
                                    f"{TIER_LABELS[tl]} [{names_l}] holds {f.flight_no} while {TIER_LABELS[th]} "
                                    f"[{names_h}] is placed later/unresolved"))
     return v
+
+
+def bag_connection_minutes(*, bag_ready: datetime, std: datetime) -> int:
+    """Minutes a transfer bag has between reaching the transfer belt and the onward departure."""
+    return int((std - bag_ready).total_seconds() // 60)
+
+
+def check_bag_connection(bag_tag: str, *, bag_ready: datetime, std: datetime, flight_no: str) -> list[Violation]:
+    """Can this bag make the onward flight? (Its owner may still make it: passengers walk, bags are sorted.)"""
+    have = bag_connection_minutes(bag_ready=bag_ready, std=std)
+    if have < LIMITS.bag_mct_min:
+        return [Violation("BAG-003", bag_tag,
+                          f"bag on the belt {bag_ready:%H:%M}, {flight_no} leaves {std:%H:%M}: {have} min "
+                          f"< bag MCT {LIMITS.bag_mct_min} min")]
+    return []
 
 
 def check_bag_routing(bag_owner: Mapping[str, str], bag_flight: Mapping[str, str],

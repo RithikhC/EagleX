@@ -25,9 +25,12 @@ PATTERNS = [
     (r"\byou\s+(are|must|should|will)\s+now\b", "role change"),
     (r"\b(dispatch|release|approve|upgrade)\b.{0,30}\b(immediately|now|without)\b", "unauthorised action"),
     (r"\bthis\s+is\s+the\s+(occ\s+)?(director|captain|controller|admin|ceo)\b", "claims authority"),
+    (r"\b(extend|extending|extension|stretch|exceed)\w*\b.{0,30}\b(duty|fdp|limit|hours)\b", "asks to change a duty limit"),
+    (r"\b(duty|fdp)\b.{0,30}\b(extend|extension|waive|ignore|over)\b", "asks to change a duty limit"),
+    (r"\bdiscretion\b", "invokes discretion by message"),
 ]
 _COMPILED = [(re.compile(p, re.IGNORECASE), why) for p, why in PATTERNS]
-WITHHELD = "[withheld by AeroTurn: this passenger text looked like an instruction to the AI]"
+WITHHELD = "[withheld by AeroTurn: this free text looked like an instruction or a rule change]"
 
 
 def scan(text: str) -> list[str]:
@@ -40,7 +43,7 @@ def scan(text: str) -> list[str]:
 def scrub(obj, hits: list[dict] | None = None, _owner: str | None = None):
     """Return a copy of ``obj`` with injected instructions in untrusted fields withheld. ``hits`` collects findings."""
     if isinstance(obj, dict):
-        owner = obj.get("pax_id") or obj.get("crew_id") or _owner
+        owner = obj.get("pax_id") or obj.get("crew_id") or obj.get("msg_id") or _owner
         out = {}
         for k, v in obj.items():
             if k in UNTRUSTED_KEYS and isinstance(v, str):

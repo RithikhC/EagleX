@@ -23,10 +23,18 @@ class BagSystemFault(RuntimeError):
     pass
 
 
-def arm(conn: sqlite3.Connection, kind: str, at_step: int) -> dict:
+def arm(conn: sqlite3.Connection, kind: str, at_step: int, batch: int | None = None,
+        persistent: bool = False) -> dict:
+    """Arm a one-shot fault. ``at_step`` counts passengers; with ``batch`` it counts within that batch
+    (batched execution: batch 1 = vulnerable passengers, then batches of 10). ``persistent`` (bag-system fault in
+    batched mode only) makes the retry of that batch fail too, to show the hand-over to the controller."""
     if kind not in KINDS:
         raise ValueError(f"unknown fault {kind}")
     spec = {"kind": kind, "at_step": max(1, int(at_step))}
+    if batch is not None:
+        spec["batch"] = max(1, int(batch))
+    if persistent:
+        spec["persistent"] = True
     db.set_meta(conn, "chaos", json.dumps(spec))
     return spec
 

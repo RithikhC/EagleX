@@ -17,7 +17,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from aeroturn import (agent, audit, config, costs, crew, db, edge_cases, faults, guards, hitl, lab, llm, narrative,
+from aeroturn import (agent, audit, config, costs, crew, curveballs, db, edge_cases, faults, guards, hitl, lab, llm, narrative,
                       reconcile, recovery, sanitize, tools, turnaround)
 from aeroturn.facts import pax_facts
 from aeroturn.timeutil import dur, hm, minutes, parse
@@ -182,7 +182,7 @@ def snapshot(db_path: str, version: str) -> dict:
             "history": hitl.history(c),
             "guard_log": db.rows(c, "SELECT seq, sim_time, actor, action, detail FROM audit_log WHERE (actor = 'GUARD' "
                                     "AND (action LIKE '%BLOCK%' OR action LIKE '%REFUSED%')) OR action LIKE 'WITHDRAWN%' "
-                                    "OR action = 'ESCALATION' ORDER BY seq DESC LIMIT 10"),
+                                    "OR action IN ('ESCALATION', 'APPROVAL STALE') ORDER BY seq DESC LIMIT 10"),
             "txns": db.rows(c, "SELECT * FROM txn_log ORDER BY started_at DESC"),
             "chain": audit.verify_chain(c),
             "clock": db.now(c),
@@ -347,7 +347,8 @@ def sc_crs_release():
 def sc_rebook_remaining():
     c = conn()
     p = tools.dispatch(c, "plan_passenger_recovery", {"objective": "earliest_arrival"}, actor="OCC_UI")
-    r = tools.dispatch(c, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"]}, actor="OCC_UI")
+    r = tools.dispatch(c, "execute_atomic_passenger_rebook", {"plan_id": p["plan_id"], "batch_size": 10},
+                       actor="OCC_UI")
     if r.get("status") == "COMMITTED":
         tools.dispatch(c, "send_passenger_notifications", {"templates": narrative.DEFAULT_TEMPLATES}, actor="OCC_UI")
     push_incident("good" if r.get("status") == "COMMITTED" else "warn", f"Rebook remaining passengers: {r.get('status')}")
@@ -378,11 +379,18 @@ def sc_reset():
     push_incident("info", "Scenario reset: 14:50 GST, EK812 on approach, nothing decided")
 
 
-def cb_approve(change_id: str):
+def cb_approve(change_id: str, seen_hash: str | None = None):
     try:
-        r = hitl.approve(conn(), change_id, controller(), "approved")
+        r = hitl.approve(conn(), change_id, controller(), "approved", seen_hash=seen_hash)
     except hitl.ApprovalError as exc:
         r = {"status": "REFUSED", "error": str(exc)}
+    if r["status"] == "STALE":
+        rs = r.get("restaged") or {}
+        push_incident("warn", f"Controller: {r.get('change_type', change_id)} STALE, nothing applied",
+                      [f"You approved state #{r['approved_state']}; it is now #{r['current_state']}.",
+                       f"Re-staged as {rs.get('change_id', '?')} ({rs.get('status', '?')}) for a fresh decision."],
+                      ["STALE"])
+        return
     lines, rules = verdict_lines(r)
     push_incident("good" if r["status"] == "APPROVED" else "crit",
                   f"Controller: {r.get('change_type', change_id)} {r['status']}", lines or [r.get("message", "")], rules)
@@ -719,7 +727,7 @@ st.markdown(
     f"<span class='badge'><i>⛓</i>audit {'intact' if SNAP['chain']['ok'] else 'BROKEN'} · {SNAP['chain']['entries']}</span>"
     f"</div></div>", unsafe_allow_html=True)
 
-tabs = st.tabs(["📊 Operations", "🧪 Edge cases", "🛡 Guardrails", "👥 Passengers", "🧑‍✈️ Crew & duty",
+tabs = st.tabs(["📊 Operations", "🎯 Curveballs", "🧪 Edge cases", "🛡 Guardrails", "👥 Passengers", "🧑‍✈️ Crew & duty",
                 "🔧 Turnaround & MX", "💶 Cost & network", "📜 Audit & data"], key="main_tabs", on_change="rerun")
 
 # ===========================================================================
@@ -764,8 +772,9 @@ with tabs[0]:
                                  help="The AI agent plans the stand, captain, departure time and passenger rebooking; "
                                       "code checks every step")
             inject = b[2].toggle("Chaos test", value=True,
-                                 help="Sell a seat to someone else halfway through the rebooking, to prove the save is "
-                                      "all-or-nothing")
+                                 help="Sell a seat to someone else halfway through the rebooking: only the batch it "
+                                      "hits rolls back (all-or-nothing), earlier batches stay saved, and the batch is "
+                                      "re-planned and retried")
             b[3].button("✅ Approve all", on_click=sc_approve_all, width="stretch",
                         help="You are the operations controller: approve every change the AI proposed")
             b[4].button("🔧 Sign-off & release", on_click=sc_crs_release, width="stretch",
@@ -941,13 +950,16 @@ with tabs[0]:
                 d = {k_: v for k_, v in ch["payload"].items() if not k_.startswith("_")}
                 det = ", ".join(f"{k_}={v}" for k_, v in d.items() if k_ != "crew_ids")
                 vu = f" · decide by {hm(ch['valid_until'])}" if ch["valid_until"] else ""
+                vu += f" · state #{ch['state_hash'][:6]}" if ch.get("state_hash") else ""
                 st.markdown(f"<div class='qcard'><div class='t'>{status_html('warn', ch['change_type'])} "
                             f"{html.escape(ch['flight_no'])}</div><div class='d'>{html.escape(det)}{vu}</div>"
                             f"<div class='d'>{html.escape(ch['justification'][:140])}</div></div>",
                             unsafe_allow_html=True)
                 qa, qb = st.columns(2)
-                qa.button("Approve", key=f"ap_{ch['change_id']}", on_click=cb_approve, args=(ch["change_id"],),
-                          type="primary", width="stretch")
+                qa.button("Approve", key=f"ap_{ch['change_id']}", on_click=cb_approve,
+                          args=(ch["change_id"], ch.get("state_hash")), type="primary", width="stretch",
+                          help="Your approval is bound to the state shown on this card. If it changes before "
+                               "execution, nothing is applied and the decision comes back to you.")
                 qb.button("Reject", key=f"rj_{ch['change_id']}", on_click=cb_reject, args=(ch["change_id"],),
                           width="stretch")
             if risk["at_risk"] and SNAP["rebook_order"]:
@@ -964,6 +976,13 @@ with tabs[0]:
                                 f"<div class='d'>{html.escape(d.get('reason', '')[:180])} · {hm(gl['sim_time'])}</div>"
                                 + "".join(f"<div class='d'>→ {html.escape(o_[:120])}</div>" for o_ in d.get("options", [])[:2])
                                 + "</div>", unsafe_allow_html=True)
+                    continue
+                if gl["action"] == "APPROVAL STALE":
+                    st.markdown(f"<div class='qcard'><div class='t'>{status_html('warn', 'APPROVAL STALE')}</div>"
+                                f"<div class='d'>{html.escape(d.get('change_id', ''))} · state "
+                                f"#{html.escape(str(d.get('approved_state', ''))[:6])} → "
+                                f"#{html.escape(str(d.get('current_state', ''))[:6])}: nothing applied, re-staged"
+                                f" · {hm(gl['sim_time'])}</div></div>", unsafe_allow_html=True)
                     continue
                 if gl["action"].startswith("WITHDRAWN"):
                     st.markdown(f"<div class='qcard'><div class='t'>{status_html('warn', gl['action'])}</div>"
@@ -1003,8 +1022,8 @@ def edge_step_html(stp: dict) -> str:
             f"{html.escape(stp['text'])}</div>")
 
 
-with tabs[1]:
-    if tabs[1].open:
+with tabs[2]:
+    if tabs[2].open:
         ss.setdefault("edge", {})
         res_ = ss["edge"]
         with st.container(border=True):
@@ -1061,6 +1080,70 @@ with tabs[1]:
                           width="stretch")
 
 # ===========================================================================
+# CURVEBALLS U-4.1 .. U-4.5 (the organisers' live tests, end to end in sandboxes)
+# ===========================================================================
+def cb_curveball(cb_id: str):
+    ss.setdefault("cbs", {})[cb_id] = curveballs.run_curveball(cb_id)
+
+
+with tabs[1]:
+    if tabs[1].open:
+        ss.setdefault("cbs", {})
+        cres = ss["cbs"]
+        with st.container(border=True):
+            h1, h2 = st.columns([3.2, 1], vertical_alignment="center")
+            h1.markdown(f"<div class='sec'>{len(curveballs.CURVEBALLS)} curveballs · the organisers' live tests</div>"
+                        "<div class='small'>Each curveball runs its exact live test end to end on a throw-away copy of the "
+                        "scenario with the real tools, guards, transactions and controller workflow, then checks the result "
+                        "in plain words. Your live session is not touched.</div>", unsafe_allow_html=True)
+            cb_all = h2.button(f"▶ Run all {len(curveballs.CURVEBALLS)}", type="primary", width="stretch", key="cb_all")
+        if cb_all:
+            bar = st.progress(0.0, text="Running curveballs…")
+            for i_, cb_ in enumerate(curveballs.CURVEBALLS):
+                bar.progress(i_ / len(curveballs.CURVEBALLS), text=f"{cb_.id} · {cb_.title}")
+                cres[cb_.id] = curveballs.run_curveball(cb_.id)
+            bar.empty()
+        if cres:
+            done = list(cres.values())
+            kk = st.columns(3, gap="small")
+            npass = sum(r_["passed"] for r_ in done)
+            kpi(kk[0], "Live tests passed", f"{npass}/{len(done)}", f"of {len(curveballs.CURVEBALLS)} curveballs",
+                "good" if npass == len(done) else "crit", "PASS" if npass == len(done) else "FAIL")
+            nchk = sum(len(r_["checks"]) for r_ in done)
+            kpi(kk[1], "Checks", f"{sum(c_['passed'] for r_ in done for c_ in r_['checks'])}/{nchk}",
+                "plain-language assertions", "good" if npass == len(done) else "crit", "CHECKED")
+            kpi(kk[2], "Run time", f"{sum(r_['ms'] for r_ in done) / 1000:.1f} s", "fresh sandbox per test", "good",
+                "FAST")
+            st.write("")
+        for cb_ in curveballs.CURVEBALLS:
+            r_ = cres.get(cb_.id)
+            with st.container(border=True):
+                left, right = st.columns([1.15, 1], gap="medium")
+                badge = status_html(*LEVEL[r_["level"]]) if r_ else "<span class='small'>not run</span>"
+                left.markdown(f"<div class='ec'><div class='h'><span class='id'>{cb_.id}</span>{badge}</div>"
+                              f"<div class='t'>{html.escape(cb_.title)}</div>"
+                              f"<div class='p'><b>Brief.</b> {html.escape(cb_.brief)}</div>"
+                              f"<div class='p'><b>How AeroTurn handles it.</b> {html.escape(cb_.build)}</div>"
+                              f"<div class='w'>Live test: {html.escape(cb_.live_test)}</div>"
+                              + (f"<div class='o'>{html.escape(r_['outcome'])}</div>" if r_ else "")
+                              + "</div>", unsafe_allow_html=True)
+                left.button("Run again" if r_ else "▶ Run this live test", key=f"cb_{cb_.id}", on_click=cb_curveball,
+                            args=(cb_.id,), width="stretch")
+                if r_:
+                    right.markdown("".join(f"<div class='ck'><b style='color:{GOOD if c_['passed'] else CRIT}'>"
+                                           f"{'✓' if c_['passed'] else '✕'}</b>{html.escape(c_['label'])}"
+                                           + (f" <span class='small'>({html.escape(str(c_['detail']))})</span>"
+                                              if c_["detail"] else "") + "</div>" for c_ in r_["checks"]),
+                                   unsafe_allow_html=True)
+                    with right.expander(f"Timeline · {len(r_['steps'])} steps · {r_['ms']} ms", expanded=False):
+                        st.markdown("".join(edge_step_html(x_) for x_ in r_["steps"]), unsafe_allow_html=True)
+                else:
+                    right.markdown("<div class='small' style='padding-top:6px'>Press ▶ to run the live test. The "
+                                   "checks and the full timeline (world, AeroTurn, guard, human) appear here.</div>",
+                                   unsafe_allow_html=True)
+
+
+# ===========================================================================
 # GUARDRAILS (University track: live evidence for each of the five guardrails)
 # ===========================================================================
 def cb_injection_test():
@@ -1082,8 +1165,8 @@ def guard_card(col, n: int, title: str, ok: bool, how: str, metrics: list[tuple[
                  unsafe_allow_html=True)
 
 
-with tabs[2]:
-    if tabs[2].open:
+with tabs[3]:
+    if tabs[3].open:
         log = db.rows(C, "SELECT actor, action, detail FROM audit_log ORDER BY seq")
         def _count(pred):
             return sum(1 for r_ in log if pred(r_))
@@ -1155,8 +1238,8 @@ with tabs[2]:
 # ===========================================================================
 # PASSENGERS
 # ===========================================================================
-with tabs[3]:
-    if tabs[3].open:
+with tabs[4]:
+    if tabs[4].open:
         only = st.toggle("Only disrupted passengers", value=True)
         base = {p["pax_id"]: p for p in SNAP["orig"]["passengers"]}
         rows = []
@@ -1178,8 +1261,8 @@ with tabs[3]:
 # ===========================================================================
 # CREW & DUTY
 # ===========================================================================
-with tabs[4]:
-    if tabs[4].open:
+with tabs[5]:
+    if tabs[5].open:
         sc = SNAP["crew"]
         st.markdown(f"<div class='sec'>Standby captain matcher · {html.escape(sc['summary'])}</div>",
                     unsafe_allow_html=True)
@@ -1215,8 +1298,8 @@ with tabs[4]:
 # ===========================================================================
 # TURNAROUND & MX
 # ===========================================================================
-with tabs[5]:
-    if tabs[5].open:
+with tabs[6]:
+    if tabs[6].open:
         st.plotly_chart(gantt(), config=PLOT_CFG, theme=None, key="gantt2")
         st.dataframe(pd.DataFrame([{"Task": t["task_id"], "Name": t["name"], "Start": t["start_hm"], "End": t["end_hm"],
                                     "Min": t["duration_min"], "Slack": t["slack_min"],
@@ -1240,8 +1323,8 @@ with tabs[5]:
 # ===========================================================================
 # COST & NETWORK
 # ===========================================================================
-with tabs[6]:
-    if tabs[6].open:
+with tabs[7]:
+    if tabs[7].open:
         cst = SNAP["cost"]
         st.plotly_chart(cost_chart(), config=PLOT_CFG, theme=None, key="cost2")
         st.markdown("<div class='sec'>Hold a departing connection, or rebook its passengers?</div>",
@@ -1268,8 +1351,8 @@ with tabs[6]:
 # ===========================================================================
 # AUDIT & DATA
 # ===========================================================================
-with tabs[7]:
-    if tabs[7].open:
+with tabs[8]:
+    if tabs[8].open:
         ch_ = SNAP["chain"]
         q = st.columns([3, 1])
         q[0].markdown(f"Hash chain **{'intact' if ch_['ok'] else 'BROKEN at ' + str(ch_.get('broken_at_seq'))}** · "

@@ -87,7 +87,7 @@ GATES = [
     ("B14", "B", "CONTACT", 6, 0), ("C31", "C", "CONTACT", 8, 0), ("R205", "R", "REMOTE", 11, 25),
     ("A1", "A", "CONTACT", 9, 0), ("A3", "A", "CONTACT", 9, 0), ("A8", "A", "CONTACT", 9, 0),
     ("A12", "A", "CONTACT", 9, 0), ("A20", "A", "CONTACT", 10, 0), ("A22", "A", "CONTACT", 10, 0),
-    ("B19", "B", "CONTACT", 6, 0), ("B22", "B", "CONTACT", 6, 0), ("B27", "B", "CONTACT", 7, 0),
+    ("B7", "B", "CONTACT", 5, 0), ("B19", "B", "CONTACT", 6, 0), ("B22", "B", "CONTACT", 6, 0), ("B27", "B", "CONTACT", 7, 0),
     ("C40", "C", "CONTACT", 8, 0), ("C44", "C", "CONTACT", 8, 0), ("C52", "C", "CONTACT", 9, 0),
 ]
 
