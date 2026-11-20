@@ -120,6 +120,10 @@ if (stage === "all" || stage === "main") {
                         ["🔧 Release", "09_release"]]) {
     await press(b); await shot(n);
   }
+  await viewport(1250);
+  await click("Guardrails", { selector: "[role=tab]" }); await idle();
+  await click("Injection test"); await idle(30000); await sleep(1500);
+  await shot("15_guard");
   await viewport(1300);
   await click("Crew & duty", { selector: "[role=tab]" }); await idle(); await shot("13_crew");
   await click("Cost & network", { selector: "[role=tab]" }); await idle(); await shot("12_cost");
@@ -149,6 +153,17 @@ if (stage === "banners") {
                         ["Naive AI", "b_naive"]]) {
     await press(b); await shot(n);
   }
+}
+
+// ---------------- guardrails evidence after a realistic session
+if (stage === "guard") {
+  await viewport(1250);
+  await send("Page.navigate", { url: APP }); await idle(90000, 2500);
+  await press("Run recovery agent", "Recovery run complete", 420000);
+  await press("Duty breach"); await press("No CRS"); await press("Override"); await press("✅ Approve");
+  await click("Guardrails", { selector: "[role=tab]" }); await idle();
+  await click("Injection test"); await idle(30000); await sleep(1500);
+  await shot("15_guard");
 }
 
 // ---------------- session 2: a world event after the plan

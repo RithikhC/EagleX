@@ -8,6 +8,8 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
+**Round 1 submission (TechX Dubai'26 template): [PDF](docs/EagleX_Round1_Submission.pdf) · [PowerPoint](docs/EagleX_Round1_Submission.pptx)**, built with screenshots from the live demo.
+
 **Pitch deck: [PowerPoint](docs/AeroTurn_Deck.pptx) · [PDF](docs/AeroTurn_Deck.pdf)**. 17 slides built from real screenshots of the
 demo: every scenario, the 13 edge cases, how AeroTurn plugs into an airline's systems, the rollout plan and
 business case, and the datasets and sources on the thank-you slide. Rebuild it with `scripts/deck/`
@@ -312,6 +314,8 @@ Panels:
 - Live event feed, rebuilt from the audit log after a reload
 - Controller queue with Approve / Reject
 - Guard interventions, withdrawals and escalations
+
+The 🛡 **Guardrails** tab shows live evidence, from the session's own database and audit log, for each of the five University-track guardrails: deterministic validation, prompt-injection defence (with an injection test button), read/write separation, the human-in-the-loop pause and logging.
 
 The 🧪 **Edge cases** tab runs the 13 cases above (one at a time or all at once), each with its timeline and its ✓/✕ checks. Your live session is not touched.
 
