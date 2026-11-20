@@ -81,6 +81,16 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{background:{SURFACE}; border-c
 .ec .w {{color:{MUTED}; font-size:.78rem; margin-top:4px;}}
 .ec .o {{color:{INK}; font-size:.84rem; margin-top:6px; font-weight:600;}}
 .ck {{font-size:.8rem; color:{INK2}; margin:2px 0;}}
+.guide {{border:1px solid {S1}; border-radius:12px; background:#14202f; padding:12px 16px 10px 16px; margin:0 0 8px 0;}}
+.guide .gt {{font-weight:800; color:{INK}; font-size:1.02rem;}}
+.guide .gs {{color:{INK2}; font-size:.84rem; margin-top:2px;}}
+.gstep {{display:flex; gap:10px; align-items:flex-start;}}
+.gstep b.n {{flex:0 0 26px; height:26px; border-radius:50%; background:{S1}; color:#fff; text-align:center; line-height:26px;
+  font-size:.85rem;}}
+.gstep .h {{font-weight:800; color:{INK}; font-size:.9rem;}}
+.gstep .d {{color:{INK2}; font-size:.8rem; line-height:1.35;}}
+.rowlab {{font-size:.68rem; font-weight:800; letter-spacing:.07em; color:{MUTED}; text-transform:uppercase; line-height:1.15;}}
+.kpi[title] {{cursor:help;}}
 .ck b {{display:inline-block; width:15px; text-align:center; margin-right:6px;}}
 </style>
 """, unsafe_allow_html=True)
@@ -523,9 +533,14 @@ def crew_chart() -> go.Figure:
         sub = [r for r in rows if r["legal"] == legal]
         if not sub:
             continue
-        fig.add_trace(go.Bar(y=[r["who"] for r in sub], x=[max(r["m"], -150) for r in sub], orientation="h", name=name,
+        # short bars get a minimum drawn length so their label fits inside (hover shows the true margin)
+        def _len(r_):
+            x_ = max(r_["m"], -150)
+            return (-75 if x_ <= 0 else 75) if (not r_["legal"] and abs(x_) < 75) else x_
+        fig.add_trace(go.Bar(y=[r["who"] for r in sub], x=[_len(r) for r in sub], orientation="h", name=name,
                              marker=dict(color=col, line=dict(color=SURFACE, width=2)), width=0.6,
-                             text=[(f"✓ {r['m']:+d}m" if r["legal"] else f"✕ {r['why'] or 'illegal'}") for r in sub], textposition="auto", insidetextanchor="middle",
+                             text=[(f"✓ {r['m']:+d}m" if r["legal"] else f"✕ {r['why'] or 'illegal'}") for r in sub],
+                             textposition="inside" if not legal else "auto", insidetextanchor="middle",
                              insidetextfont=dict(color="#ffffff", size=11), outsidetextfont=dict(color=INK2, size=11),
                              cliponaxis=False,
                              customdata=[r["m"] for r in sub],
@@ -655,8 +670,9 @@ def audit_events(rows: list[dict]) -> list[tuple[str, str]]:
     return out
 
 
-def kpi(col, label: str, value: str, sub: str, level: str, status_label: str) -> None:
-    col.markdown(f"<div class='kpi'><div class='lab'>{html.escape(label)}</div><div class='val'>{html.escape(value)}</div>"
+def kpi(col, label: str, value: str, sub: str, level: str, status_label: str, tip: str = "") -> None:
+    t = f" title='{html.escape(tip, quote=True)}'" if tip else ""
+    col.markdown(f"<div class='kpi'{t}><div class='lab'>{html.escape(label)}</div><div class='val'>{html.escape(value)}</div>"
                  f"<div class='sub'>{status_html(level, status_label)} &nbsp;{html.escape(sub)}</div></div>",
                  unsafe_allow_html=True)
 
@@ -711,27 +727,53 @@ tabs = st.tabs(["📊 Operations", "🧪 Edge cases", "🛡 Guardrails", "👥 P
 # ===========================================================================
 with tabs[0]:
     if tabs[0].open:
-        # ---- scenario bar
+        # ---- first-visit guide (judges and new users explore on their own)
+        if ss.setdefault("guide_open", True):
+            with st.container():
+                st.markdown(
+                    "<div class='guide'><div class='gt'>👋 New here? Four clicks show everything</div>"
+                    "<div class='gs'>A Boeing 777 (EK812) lands 75 minutes late at Dubai: 45 passengers will miss their "
+                    "connections, the crew is about to run out of legal duty time, a hydraulic defect needs an "
+                    "engineer's sign-off and the next flight's captain is too tired to fly. AeroTurn's AI plans the "
+                    "recovery; safety rules in code decide what is allowed; you are the human controller.</div></div>",
+                    unsafe_allow_html=True)
+                steps = [("Run the agent", "Press ▶ Run recovery agent. The AI plans the recovery in about 15 seconds; "
+                                           "the live feed at the bottom shows every step."),
+                         ("See what changed", "The tiles turn green and the map arcs go from red to green. Changes the "
+                                              "AI may not make alone wait in the approval queue."),
+                         ("Approve and release", "Press ✅ Approve all, then 🔧 Sign-off & release: the wrong engineer "
+                                                 "is refused, the right one signs, the flight departs."),
+                         ("Try to break it", "The ⛔ buttons act like a rogue AI: every unsafe move is blocked. Also try "
+                                             "🌍 What if… and the 🧪 Edge cases and 🛡 Guardrails tabs.")]
+                gc = st.columns([1, 1, 1, 1, 0.42], gap="small", vertical_alignment="center")
+                for i_, (h_, d_) in enumerate(steps):
+                    gc[i_].markdown(f"<div class='gstep'><b class='n'>{i_ + 1}</b><div><div class='h'>{h_}</div>"
+                                    f"<div class='d'>{d_}</div></div></div>", unsafe_allow_html=True)
+                gc[4].button("Hide guide", key="guide_hide", on_click=lambda: ss.update(guide_open=False),
+                             width="stretch")
+                st.markdown(f"<div class='small' style='margin:6px 0 8px 2px;color:{MUTED}'>Jargon: FDP = a crew's legal "
+                            "duty limit · CRS = an engineer's certificate that the aircraft is safe · MCT = minimum "
+                            "time to make a connection · EOBT = earliest time the aircraft can push back · hover any "
+                            "tile or button for an explanation.</div>", unsafe_allow_html=True)
+
+        # ---- scenario bar: row 1 recovers the flight, row 2 tries to break the guards
         with st.container(border=True):
-            b = st.columns([1.45, 0.8, 0.95, 0.8, 0.85, 0.85, 0.9, 0.85, 0.85, 0.95, 0.45], gap="small",
-                           vertical_alignment="center")
-            go_run = b[0].button("▶ Run recovery agent", type="primary", width="stretch")
-            inject = b[1].toggle("Chaos", value=True, help="Inject a mid-way seat conflict at rebooking step 7")
-            b[2].button("⛔ Duty breach", on_click=sc_crew_breach, width="stretch",
-                        help="Rogue LLM: dispatch EK813 at 16:35 with the inbound crew")
-            b[3].button("⛔ No CRS", on_click=sc_no_crs, width="stretch",
-                        help="Rogue LLM: dispatch EK813 before the hydraulic CRS is signed")
-            b[4].button("⛔ Override", on_click=sc_override, width="stretch",
-                        help="Rogue LLM: call a tool with override=True / emergency waiver")
-            b[5].button("⚛ Rollback", on_click=sc_rollback, width="stretch",
-                        help="Seat conflict mid-batch on a sandbox copy: watch it roll back, then retry")
-            b[6].button("⚖ Naive AI", on_click=sc_naive, width="stretch",
-                        help="Unconstrained revenue-first rebooking plan vs the same guards")
-            b[7].button("✅ Approve", on_click=sc_approve_all, width="stretch",
-                        help="Operations Controller approves every pending change")
-            b[8].button("🔧 Release", on_click=sc_crs_release, width="stretch",
-                        help="Clock to inspection end, B2 then B1 engineer sign the CRS, release EK813")
-            with b[9].popover("🌍 What if…", width="stretch", help="Inject a world event, then AeroTurn re-validates"):
+            b = st.columns([0.62, 1.5, 1.05, 1.05, 1.4, 1.0, 0.62, 0.55], gap="small", vertical_alignment="center")
+            b[0].markdown("<div class='rowlab'>Recover<br>the flight</div>", unsafe_allow_html=True)
+            go_run = b[1].button("▶ Run recovery agent", type="primary", width="stretch",
+                                 help="The AI agent plans the stand, captain, departure time and passenger rebooking; "
+                                      "code checks every step")
+            inject = b[2].toggle("Chaos test", value=True,
+                                 help="Sell a seat to someone else halfway through the rebooking, to prove the save is "
+                                      "all-or-nothing")
+            b[3].button("✅ Approve all", on_click=sc_approve_all, width="stretch",
+                        help="You are the operations controller: approve every change the AI proposed")
+            b[4].button("🔧 Sign-off & release", on_click=sc_crs_release, width="stretch",
+                        help="Move the clock to the end of the hydraulic inspection; the wrong engineer is refused, "
+                             "the right one signs, then the flight is released")
+            with b[5].popover("🌍 What if…", width="stretch",
+                              help="Change the world after the plan (ATC hold, tired captain, leak, stand taken) and "
+                                   "watch AeroTurn re-check its decisions"):
                 st.markdown("<div class='small'>The world moves after the plan. Inject an event into this session; "
                             "AeroTurn re-checks every pending decision, withdraws what became illegal, stages a legal "
                             "replacement or escalates.</div>", unsafe_allow_html=True)
@@ -739,7 +781,22 @@ with tabs[0]:
                     st.button(label_, key=f"we_{key_}", on_click=sc_world, args=(key_,), width="stretch")
                 st.button("🔄 Re-validate now", key="we_revalidate", on_click=sc_revalidate, type="primary",
                           width="stretch")
-            b[10].button("↺", on_click=sc_reset, width="stretch", help="Reset scenario")
+            b[6].button("↺ Reset", on_click=sc_reset, width="stretch", help="Start the scenario again at 14:50")
+            if not ss["guide_open"]:
+                b[7].button("❔ Guide", key="guide_show", on_click=lambda: ss.update(guide_open=True), width="stretch",
+                            help="Show the four-step guide again")
+            r2 = st.columns([0.62, 1.12, 1.25, 1.0, 1.1, 1.15, 0.95], gap="small", vertical_alignment="center")
+            r2[0].markdown("<div class='rowlab'>Try to<br>break it</div>", unsafe_allow_html=True)
+            r2[1].button("⛔ Use tired crew", on_click=sc_crew_breach, width="stretch",
+                         help="A rogue AI tries to fly EK813 with the arriving crew, who are out of legal duty time")
+            r2[2].button("⛔ Skip engineer sign-off", on_click=sc_no_crs, width="stretch",
+                         help="A rogue AI tries to dispatch before the hydraulic repair is certified")
+            r2[3].button("⛔ Try an override", on_click=sc_override, width="stretch",
+                         help="A rogue AI calls a tool with override=True: no override exists")
+            r2[4].button("⚛ Crash mid-save", on_click=sc_rollback, width="stretch",
+                         help="A failure halfway through rebooking 45 passengers: everything rolls back, then retries")
+            r2[5].button("⚖ Naive AI vs rules", on_click=sc_naive, width="stretch",
+                         help="A revenue-first AI that ignores the rules, checked by the same guards")
         holder = st.container()
         if go_run:
             run_agent(holder, inject)
@@ -764,30 +821,37 @@ with tabs[0]:
         mx = next(m for m in state["maintenance"] if m["item"] == "MX-0412")
         cst = SNAP["cost"]
         k = st.columns(8, gap="small")
-        kpi(k[0], "EK812 in-block", state["inbound"]["eibt"], f"+{state['inbound']['delay_min']} min · gate "
-            f"{inb_f['gate_id']}", "serious", "LATE")
-        kpi(k[1], "Inbound crew FDP", f"{margin} min", f"limit {state['inbound_crew']['fdp_limit']}",
+        kpi(k[0], "EK812 at the stand", state["inbound"]["eibt"], f"+{state['inbound']['delay_min']} min · gate "
+            f"{inb_f['gate_id']}", "serious", "LATE",
+            tip="When the late aircraft reaches its parking stand (in-block time), and how late that is")
+        kpi(k[1], "Crew duty time left", f"{margin} min", f"limit {state['inbound_crew']['fdp_limit']}",
             "crit" if margin < 0 else ("warn" if margin < 30 else "good"), "TIGHT" if 0 <= margin < 30 else
-            ("BREACH" if margin < 0 else "OK"))
+            ("BREACH" if margin < 0 else "OK"),
+            tip="Minutes the arriving crew has left before their legal flight-duty limit (FDP) when they reach the stand")
         kpi(k[2], "Connections at risk", str(risk["at_risk"]),
             f"{risk['awaiting_hold_decision']} await hold" if risk["awaiting_hold_decision"] else "of 280 connecting",
             "crit" if risk["at_risk"] else ("warn" if risk["awaiting_hold_decision"] else "good"),
-            "AT RISK" if risk["at_risk"] else ("HOLD" if risk["awaiting_hold_decision"] else "CLEAR"))
+            "AT RISK" if risk["at_risk"] else ("HOLD" if risk["awaiting_hold_decision"] else "CLEAR"),
+            tip="Passengers who will miss their onward flight unless they are rebooked or the flight waits")
         kpi(k[3], "Vulnerable protected", f"{len(protected)}/{len(vul_ids)}", "UMNR · PRM · MEDA · PREG",
             "good" if len(protected) == len(vul_ids) else "crit",
-            "SAFE" if len(protected) == len(vul_ids) else "EXPOSED")
-        kpi(k[4], "EK813 off-blocks", hm(out_f["etd"]) if out_f["etd"] else cpm["eobt_hm"],
+            "SAFE" if len(protected) == len(vul_ids) else "EXPOSED",
+            tip="Children flying alone, wheelchair users, medical and pregnant passengers who are safely rebooked")
+        kpi(k[4], "EK813 departure", hm(out_f["etd"]) if out_f["etd"] else cpm["eobt_hm"],
             f"STD {hm(out_f['std'])} · {out_f['status'].lower()}",
             "good" if out_f["status"] == "RELEASED" else "warn", out_f["status"] if out_f["status"] == "RELEASED"
-            else "DELAYED")
-        kpi(k[5], "MX-0412 hydraulic", "Signed" if mx["status"] == "CLOSED" else "Open",
+            else "DELAYED", tip="Earliest time the next flight can push back, set by the turnaround's critical path")
+        kpi(k[5], "Hydraulic repair", "Signed" if mx["status"] == "CLOSED" else "Open",
             "B1 CRS valid" if mx["status"] == "CLOSED" else "dispatch-blocking",
-            "good" if mx["status"] == "CLOSED" else "crit", "CRS" if mx["status"] == "CLOSED" else "NO-GO")
-        kpi(k[6], "Controller queue", str(len(SNAP["pending"])), "gate · hold · crew · retime",
-            "warn" if SNAP["pending"] else "good", "PENDING" if SNAP["pending"] else "EMPTY")
+            "good" if mx["status"] == "CLOSED" else "crit", "CRS" if mx["status"] == "CLOSED" else "NO-GO",
+            tip="Defect MX-0412: a licensed B1 engineer must sign the certificate (CRS) before EK813 may leave")
+        kpi(k[6], "Waiting for you", str(len(SNAP["pending"])), "gate · hold · crew · retime",
+            "warn" if SNAP["pending"] else "good", "PENDING" if SNAP["pending"] else "EMPTY",
+            tip="Changes the AI proposed but may not apply itself: you approve or reject them below")
         sav = cst["savings"] if SNAP["rebook_order"] else 0
         kpi(k[7], "Passenger cost saved", f"AED {sav:,}", f"vs legacy AED {cst['legacy_auto_reprotect']['total']:,}",
-            "good" if sav > 0 else "info", "SAVED" if sav > 0 else "PENDING")
+            "good" if sav > 0 else "info", "SAVED" if sav > 0 else "PENDING",
+            tip="Compensation and care saved compared with rebooking everyone on tomorrow's flight")
 
         st.write("")
         # ---- row A: map · turnaround · crew
@@ -801,7 +865,8 @@ with tabs[0]:
                         f"(+{cpm['delay_vs_std_min']})</div>", unsafe_allow_html=True)
             st.plotly_chart(gantt(), config=PLOT_CFG, theme=None, key="gantt")
         with a3.container(border=True):
-            st.markdown("<div class='sec'>Crew duty legality (FDP margin)</div>", unsafe_allow_html=True)
+            st.markdown("<div class='sec'>Crew duty legality · minutes left before the legal limit</div>",
+                        unsafe_allow_html=True)
             st.plotly_chart(crew_chart(), config=PLOT_CFG, theme=None, key="crew")
 
         # ---- row B: flow · priority queue · cost
@@ -868,7 +933,7 @@ with tabs[0]:
                     st.caption("numeric grounding: " + ("all numbers traced to facts" if g["grounded"]
                                                         else "ungrounded " + ", ".join(g["ungrounded"])))
         with c2.container(border=True, height=430):
-            st.markdown(f"<div class='sec'>Operations Controller queue · {len(SNAP['pending'])} pending</div>",
+            st.markdown(f"<div class='sec'>Approval queue · you are the controller · {len(SNAP['pending'])} pending</div>",
                         unsafe_allow_html=True)
             if not SNAP["pending"]:
                 st.markdown("<div class='small'>Nothing awaiting approval.</div>", unsafe_allow_html=True)
