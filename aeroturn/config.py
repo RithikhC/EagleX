@@ -29,6 +29,11 @@ HOME_CARRIER = "EK"
 # Money is reported in UAE dirhams. EU261 amounts are fixed in EUR by law and are converted at EUR_TO_AED.
 CURRENCY = "AED"
 EUR_TO_AED = 4.10                 # reference mid-market rate (27 Oct 2026); set to the day's rate
+# LLM price for the cost report (GroqCloud list price for openai/gpt-oss-120b; check groq.com/pricing before quoting)
+PRICE_IN_PER_M = 0.15     # US$ per million input tokens
+PRICE_OUT_PER_M = 0.60    # US$ per million output tokens
+PRICE_SOURCE = "GroqCloud list price for openai/gpt-oss-120b, Oct 2026"
+
 DELAY_COST_AED_PER_MIN = 400      # tactical delay cost, wide-body aircraft (assumption, ~EUR 100)
 PAX_MINUTE_AED = 1.50             # value of one passenger-minute of delay for those on board (assumption)
 MAX_RECOMMENDED_HOLD_MIN = 15     # commercial policy for suggesting a connection hold (the safety cap is in guards)

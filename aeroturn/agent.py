@@ -140,6 +140,8 @@ class AeroTurnAgent:
         if client is not None:
             client.on_wait = lambda s, why: self.emit(
                 "system", f"{client.provider} {why}: free-tier tokens/minute used up, waiting {s:.0f}s and retrying")
+            if hasattr(client, "on_notice"):
+                client.on_notice = lambda text: self.emit("system", f"Resilience: {text}")
 
     # ------------------------------------------------------------------ events
     def emit(self, kind: str, title: str, detail: object = None) -> None:

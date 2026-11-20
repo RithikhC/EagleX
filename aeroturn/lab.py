@@ -33,7 +33,7 @@ def cleanup_runtime(max_age_hours: float = 12) -> int:
     cutoff = time.time() - max_age_hours * 3600
     removed = 0
     for p in config.RUNTIME_DIR.glob("*.sqlite"):
-        if p.name.startswith(("session_", "sb_", "tamper_")) and p.stat().st_mtime < cutoff:
+        if p.name.startswith(("session_", "sb_", "tamper_", "inbox_")) and p.stat().st_mtime < cutoff:
             try:
                 p.unlink()
                 removed += 1

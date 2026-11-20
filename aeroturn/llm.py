@@ -8,6 +8,13 @@ Selection (env AEROTURN_LLM = auto | ollama | groq | gemini | offline):
   auto -> Ollama if reachable on localhost, else GROQ_API_KEY, else GEMINI_API_KEY,
           else offline (deterministic policy, clearly labelled as "no LLM").
 Keys can live in a .env file in the project root (see .env.example).
+
+Resilience (Round 3): every call goes through ResilientClient:
+  * a time limit per call (AEROTURN_LLM_TIMEOUT, default 20 s), so one slow call cannot freeze the agent;
+  * at most 2 retries with a short wait (1 s, then 2 s), then stop;
+  * a fallback chain: primary model -> backup provider/model -> the local offline policy (no network);
+  * plain messages for the user ("timed out, retrying", "using the backup") instead of a crash;
+  * every call is metered (provider, latency, input/output tokens) for the cost and latency report.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -62,13 +70,13 @@ class OpenAICompatClient:
     # Free tiers (Groq, Gemini) limit tokens per minute: a few large calls beat many small ones.
     RATE_LIMITED_PROVIDERS = ("groq", "gemini")
 
-    def __init__(self, provider: str, base_url: str, api_key: str, model: str, timeout: int = 180,
-                 max_retries: int = 6, max_wait_s: float = 35.0):
+    def __init__(self, provider: str, base_url: str, api_key: str, model: str, timeout: float | None = None,
+                 max_retries: int = 2, max_wait_s: float = 20.0):
         self.provider = provider
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
-        self.timeout = timeout
+        self.timeout = timeout or float(os.environ.get("AEROTURN_LLM_TIMEOUT", "20"))
         self.max_retries = max_retries
         self.max_wait_s = max_wait_s
         self.on_wait = None          # callback(seconds, reason) so the UI can show "rate limited, waiting"
@@ -86,16 +94,16 @@ class OpenAICompatClient:
     def rate_limited(self) -> bool:
         return self.provider in self.RATE_LIMITED_PROVIDERS
 
-    def _post(self, body: dict) -> dict:
+    def _post(self, body: dict, timeout: float | None = None) -> dict:
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions", data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}",
                      "User-Agent": "aeroturn/1.0"}, method="POST")
-        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout or self.timeout) as r:
             return json.loads(r.read().decode())
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None, temperature: float = 0.2,
-             max_tokens: int = 1200, json_mode: bool = False) -> LLMResponse:
+             max_tokens: int = 1200, json_mode: bool = False, timeout: float | None = None) -> LLMResponse:
         body: dict = {"model": self.model, "messages": messages, "temperature": temperature,
                       "max_tokens": max_tokens, "stream": False}
         if tools:
@@ -112,7 +120,7 @@ class OpenAICompatClient:
         attempt = 0
         while True:
             try:
-                data = self._post(body)
+                data = self._post(body, timeout)
                 break
             except urllib.error.HTTPError as e:
                 detail = e.read().decode(errors="replace")[:600]
@@ -240,11 +248,156 @@ def _pick_groq_model(api_key: str, wanted: str | None) -> str:
     return wanted or (available[0] if available else GROQ_PREFERENCE[0])
 
 
-def make_client(info: dict | None = None) -> OpenAICompatClient | None:
+# ---------------------------------------------------------------------------
+# Resilience: timeout, limited retries, fallback chain, metering
+# ---------------------------------------------------------------------------
+RETRIES = 2                  # per model, after the first try
+RETRY_WAITS_S = (1.0, 2.0)   # short waits between retries
+SIMULATION = {"mode": None}  # "slow_primary": the primary model gets a 0.05 s limit, so it really times out
+CALL_LOG: list[dict] = []    # every model call in this process (for the cost and latency report)
+
+
+def _kind(exc: Exception) -> str:
+    text = str(exc).lower()
+    if isinstance(exc, (TimeoutError, socket.timeout)) or "timed out" in text or "timeout" in text:
+        return "timeout"
+    if "rate limit" in text or "http 429" in text:
+        return "rate limit"
+    if "http 401" in text or "http 403" in text:
+        return "auth"
+    return "error"
+
+
+class ResilientClient:
+    """Same interface as OpenAICompatClient, but every call has a time limit, at most two short retries, and a
+    fallback to the next model in the chain. When every model fails it raises, and the agent's local offline
+    policy (deterministic, no network) finishes the job."""
+
+    def __init__(self, chain: list[OpenAICompatClient]):
+        self.chain = chain
+        self.on_wait = None
+        self.on_notice = None        # callback(text): plain messages for the user
+        self.calls: list[dict] = []  # this client's metered calls
+        self.used = chain[0]
+        self.simulate_slow = False   # per client: the primary model gets a 0.05 s limit and really times out
+
+    # identity of the primary model (what the run is labelled with)
+    @property
+    def label(self) -> str:
+        return self.chain[0].label
+
+    @property
+    def model(self) -> str:
+        return self.chain[0].model
+
+    @property
+    def provider(self) -> str:
+        return self.chain[0].provider
+
+    @property
+    def is_qwen3(self) -> bool:
+        return self.chain[0].is_qwen3
+
+    @property
+    def rate_limited(self) -> bool:
+        return self.chain[0].rate_limited
+
+    @property
+    def backups(self) -> list[str]:
+        return [c.label for c in self.chain[1:]]
+
+    def _notice(self, text: str) -> None:
+        if self.on_notice:
+            self.on_notice(text)
+
+    def chat(self, messages: list[dict], **kw) -> LLMResponse:
+        last = "no model configured"
+        for i, c in enumerate(self.chain):
+            c.on_wait = self.on_wait
+            slow = self.simulate_slow or SIMULATION["mode"] == "slow_primary"
+            limit = 0.05 if (slow and i == 0) else c.timeout
+            for attempt in range(RETRIES + 1):
+                t0 = time.perf_counter()
+                try:
+                    resp = c.chat(messages, timeout=limit, **kw)
+                except Exception as exc:  # noqa: BLE001 - classified, logged, retried or handed over
+                    kind = _kind(exc)
+                    last = f"{c.label}: {kind}"
+                    self._meter(c, i, attempt, kind, t0, None, str(exc)[:160])
+                    if kind in ("timeout", "error") and attempt < RETRIES:
+                        wait = RETRY_WAITS_S[attempt]
+                        self._notice(f"{c.model} {kind} after {limit:g} s. Still working: retry {attempt + 1}/"
+                                     f"{RETRIES} in {wait:g} s")
+                        time.sleep(wait)
+                        continue
+                    break
+                self._meter(c, i, attempt, "ok", t0, (resp.raw or {}).get("usage") or {}, "")
+                self.used = c
+                if i > 0:
+                    self._notice(f"Answered by the backup model {c.label}")
+                return resp
+            nxt = self.chain[i + 1].label if i + 1 < len(self.chain) else "the local offline policy (no network)"
+            self._notice(f"Couldn't reach {c.label} ({last.split(': ')[-1]}). Using {nxt} instead")
+        raise RuntimeError(f"all models unavailable ({last}); the local offline policy takes over")
+
+    def _meter(self, c: OpenAICompatClient, rank: int, attempt: int, status: str, t0: float, usage: dict | None,
+               error: str) -> None:
+        rec = {"at": time.strftime("%H:%M:%S"), "provider": c.provider, "model": c.model,
+               "role": "primary" if rank == 0 else "backup", "attempt": attempt + 1, "status": status,
+               "latency_ms": int((time.perf_counter() - t0) * 1000),
+               "input_tokens": int((usage or {}).get("prompt_tokens") or 0),
+               "output_tokens": int((usage or {}).get("completion_tokens") or 0), "error": error}
+        self.calls.append(rec)
+        CALL_LOG.append(rec)
+        del CALL_LOG[:-500]
+
+
+BACKUP_PREFERENCE = ("llama-3.3-70b-versatile", "openai/gpt-oss-20b", "llama-3.1-8b-instant")
+
+
+_MODELS_CACHE: dict[str, list[str]] = {}
+
+
+def _groq_models(api_key: str) -> list[str]:
+    if api_key in _MODELS_CACHE:
+        return _MODELS_CACHE[api_key]
+    try:
+        req = urllib.request.Request("https://api.groq.com/openai/v1/models",
+                                     headers={"Authorization": f"Bearer {api_key}", "User-Agent": "aeroturn/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            _MODELS_CACHE[api_key] = [m["id"] for m in json.loads(r.read().decode()).get("data", [])]
+            return _MODELS_CACHE[api_key]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def backup_chain(info: dict) -> list[OpenAICompatClient]:
+    """Backups after the primary: a second provider when its key exists (Gemini, Groq), then a second Groq model."""
+    out: list[OpenAICompatClient] = []
+    gem = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    groq = os.environ.get("GROQ_API_KEY")
+    if info["provider"] != "gemini" and gem:
+        out.append(OpenAICompatClient("gemini", "https://generativelanguage.googleapis.com/v1beta/openai", gem,
+                                      os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")))
+    if groq:
+        if info["provider"] != "groq":
+            out.append(OpenAICompatClient("groq", "https://api.groq.com/openai/v1", groq,
+                                          _pick_groq_model(groq, os.environ.get("GROQ_MODEL"))))
+        available = _groq_models(groq)
+        want = os.environ.get("GROQ_BACKUP_MODEL")
+        pick = want if want and (not available or want in available) else next(
+            (m for m in BACKUP_PREFERENCE if m in available and m != info.get("model")), None)
+        if pick:
+            out.append(OpenAICompatClient("groq", "https://api.groq.com/openai/v1", groq, pick))
+    return out
+
+
+def make_client(info: dict | None = None) -> ResilientClient | None:
     info = info or detect()
     if info["provider"] == "offline":
         return None
-    return OpenAICompatClient(info["provider"], info["base_url"], info["api_key"], info["model"])
+    primary = OpenAICompatClient(info["provider"], info["base_url"], info["api_key"], info["model"])
+    return ResilientClient([primary] + backup_chain(info))
 
 
 def describe(info: dict) -> str:
