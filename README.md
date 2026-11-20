@@ -8,7 +8,7 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
-**🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script](docs/PITCH_ROUND3.md).**
+**🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script for three speakers](docs/PITCH_ROUND3.md).**
 The journey starts from a real delay alert, checked in code. The 🚦 *Pilot console* tab runs 12 inbox requests back
 to back, with a forced model timeout recovered by the backup model. It also triggers the three safety cases on
 demand (safe auto-action, risky action paused with a safe default, blocked attack), shows the hash-chained audit
