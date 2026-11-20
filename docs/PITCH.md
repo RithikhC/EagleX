@@ -52,7 +52,7 @@ every slide). This file is the talk track and the judge Q&A. The arithmetic behi
 | Same-day arrivals | 45/45 (legacy 0/45) |
 | Unconstrained plan | blocked: 15 violations across PAX-001/002/003/004/006 |
 | Edge cases (world changes after the plan) | 13/13 pass, 67/67 checks: 9 resolved automatically, 4 escalated |
-| Tests | 79 passing |
+| Tests | 86 passing |
 
 ## Anticipated judge questions
 

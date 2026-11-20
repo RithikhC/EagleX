@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from aeroturn import (agent, audit, config, costs, crew, db, edge_cases, faults, guards, hitl, lab, llm, narrative,
-                      reconcile, recovery, tools, turnaround)
+                      reconcile, recovery, sanitize, tools, turnaround)
 from aeroturn.facts import pax_facts
 from aeroturn.timeutil import dur, hm, minutes, parse
 
@@ -618,7 +618,11 @@ def audit_events(rows: list[dict]) -> list[tuple[str, str]]:
             d = {}
         who = actor.split(":", 1)[-1] if actor.startswith("AGENT") else actor.replace("_", " ").lower()
         if action.startswith("CALL "):
-            out.append(("tool_call", f"{who} → {action[5:]}"))
+            acc = str(d.get("_access", "")).upper()
+            out.append(("tool_call", f"{who} → {(acc + ' · ') if acc else ''}{action[5:]}"))
+        elif action == "INJECTION_BLOCKED":
+            out.append(("guard_block", f"Prompt injection withheld: {d.get('owner', '')} {d.get('field', '')} "
+                                       f"({', '.join(d.get('reasons', [])[:2])})"))
         elif actor == "GUARD":
             rules = ", ".join(d.get("rules", []) or [])
             kind = "guard_block" if ("BLOCK" in action or "REFUSED" in action) else "hitl"
@@ -699,8 +703,8 @@ st.markdown(
     f"<span class='badge'><i>⛓</i>audit {'intact' if SNAP['chain']['ok'] else 'BROKEN'} · {SNAP['chain']['entries']}</span>"
     f"</div></div>", unsafe_allow_html=True)
 
-tabs = st.tabs(["📊 Operations", "🧪 Edge cases", "👥 Passengers", "🧑‍✈️ Crew & duty", "🔧 Turnaround & MX",
-                "💶 Cost & network", "📜 Audit & data"], key="main_tabs", on_change="rerun")
+tabs = st.tabs(["📊 Operations", "🧪 Edge cases", "🛡 Guardrails", "👥 Passengers", "🧑‍✈️ Crew & duty",
+                "🔧 Turnaround & MX", "💶 Cost & network", "📜 Audit & data"], key="main_tabs", on_change="rerun")
 
 # ===========================================================================
 # OPERATIONS DASHBOARD
@@ -901,9 +905,9 @@ with tabs[0]:
                                 f"<div class='d'>{html.escape(d.get('change_id', ''))} · {html.escape(d.get('reason', ''))}"
                                 f" · {hm(gl['sim_time'])}</div></div>", unsafe_allow_html=True)
                     continue
-                rules = d.get("rules") or []
+                rules = d.get("rules") or d.get("reasons") or []
                 st.markdown(f"<div class='qcard'><div class='t'>{status_html('crit', gl['action'])}</div>"
-                            f"<div class='d'>{html.escape(str(d.get('flight') or d.get('item') or d.get('plan_id') or ''))}"
+                            f"<div class='d'>{html.escape(str(d.get('flight') or d.get('item') or d.get('plan_id') or d.get('owner') or ''))}"
                             f" · {hm(gl['sim_time'])}</div><div>"
                             + "".join(f"<span class='chip'>{html.escape(r)}</span>" for r in rules)
                             + "</div></div>", unsafe_allow_html=True)
@@ -992,10 +996,102 @@ with tabs[1]:
                           width="stretch")
 
 # ===========================================================================
-# PASSENGERS
+# GUARDRAILS (University track: live evidence for each of the five guardrails)
 # ===========================================================================
+def cb_injection_test():
+    c = conn()
+    r = tools.dispatch(c, "list_disrupted_passengers", {}, actor="AGENT")
+    withheld = [p for p in r.get("passengers", []) if p.get("remarks") == sanitize.WITHHELD]
+    push_incident("crit" if withheld else "warn", f"Injection test: {len(withheld)} passenger remark(s) withheld before "
+                  f"reaching the LLM", [f"{p['pax_id']} {p['name']}: remark replaced with the withheld notice"
+                                        for p in withheld] or ["No instruction-like text found"], ["INJECTION_BLOCKED"])
+
+
+def guard_card(col, n: int, title: str, ok: bool, how: str, metrics: list[tuple[str, str]], where: str) -> None:
+    rows = "".join(f"<div class='d'><b style='color:{INK}'>{html.escape(v)}</b> &nbsp;{html.escape(k)}</div>"
+                   for k, v in metrics)
+    col.markdown(f"<div class='qcard' style='min-height:255px'><div class='t'>{n}. {html.escape(title)} &nbsp;"
+                 f"{status_html('good' if ok else 'crit', 'ACTIVE' if ok else 'CHECK')}</div>"
+                 f"<div class='d' style='margin:4px 0 8px 0'>{html.escape(how)}</div>{rows}"
+                 f"<div class='small' style='margin-top:8px;color:{MUTED}'>{html.escape(where)}</div></div>",
+                 unsafe_allow_html=True)
+
+
 with tabs[2]:
     if tabs[2].open:
+        log = db.rows(C, "SELECT actor, action, detail FROM audit_log ORDER BY seq")
+        def _count(pred):
+            return sum(1 for r_ in log if pred(r_))
+        calls = {"read": 0, "propose": 0, "write": 0}
+        for r_ in log:
+            if r_["action"].startswith("CALL "):
+                try:
+                    calls[json.loads(r_["detail"]).get("_access", "read")] += 1
+                except (ValueError, KeyError):
+                    pass
+        blocks = _count(lambda r_: r_["actor"] == "GUARD" and ("BLOCK" in r_["action"] or "REFUSED" in r_["action"])
+                        and r_["action"] != "INJECTION_BLOCKED")
+        schema = _count(lambda r_: r_["action"].startswith(("REJECTED_ARGS", "REJECTED_ACCESS", "UNKNOWN_TOOL")))
+        inj = [json.loads(r_["detail"]) for r_ in log if r_["action"] == "INJECTION_BLOCKED"]
+        hist = SNAP["history"]
+        by_status: dict[str, int] = {}
+        for h_ in hist:
+            by_status[h_["status"]] = by_status.get(h_["status"], 0) + 1
+        chain = SNAP["chain"]
+        with st.container(border=True):
+            h1, h2 = st.columns([3.2, 1], vertical_alignment="center")
+            h1.markdown("<div class='sec'>University-track guardrails · live evidence from this session</div>"
+                        "<div class='small'>Each card is computed from this session's database and hash-chained audit "
+                        "log, so the numbers change as you use the dashboard. Run the agent or the scenario buttons, "
+                        "then come back.</div>", unsafe_allow_html=True)
+            h2.button("🧪 Injection test", on_click=cb_injection_test, type="primary", width="stretch",
+                      help="Send the planted passenger remark through the agent's tools and watch it get withheld")
+        g1, g2, g3 = st.columns(3, gap="small")
+        guard_card(g1, 1, "Deterministic validation", integ["ok"],
+                   "Safety rules are plain Python in a sealed, SHA-256-pinned module. The LLM's proposals are checked "
+                   "by code, never trusted.",
+                   [("safety rules in guards.py", str(len(guards.RULES))), ("guard blocks this session", str(blocks)),
+                    ("tool calls rejected by schema or phase", str(schema)),
+                    ("guard fingerprint", integ["actual"][:12])],
+                   "aeroturn/guards.py · tools.validate_args · 86 automated tests")
+        ex = inj[0] if inj else None
+        guard_card(g2, 2, "Prompt-injection defence", True,
+                   "Passenger remarks and notes are untrusted data. Instruction-like text is withheld before any tool "
+                   "result reaches the LLM; notification templates cannot carry facts.",
+                   [("injections withheld this session", str(len(inj))),
+                    ("example", f"{ex['owner']} remarks: {', '.join(ex['reasons'][:2])}" if ex else
+                     "press Injection test")],
+                   "aeroturn/sanitize.py · tools.validate_template")
+        guard_card(g3, 3, "Read/write separation", True,
+                   "Every tool is read, propose or write. The planner's fact-gathering phase is locked to read tools; "
+                   "approval is not a tool at all.",
+                   [("read calls", str(calls["read"])), ("propose calls (staged, nothing changes)", str(calls["propose"])),
+                    ("write calls (guarded, atomic)", str(calls["write"]))],
+                   "tools.TOOLS[...]['access'] · tools.dispatch(allowed=...)")
+        g4, g5, g6 = st.columns(3, gap="small")
+        guard_card(g4, 4, "Human-in-the-loop pause", True,
+                   "Gate, crew, retime, hold and departure release wait for a named controller. Guards run again at "
+                   "approval and decisions expire.",
+                   [("pending", str(by_status.get("PENDING", 0))), ("approved", str(by_status.get("APPROVED", 0))),
+                    ("rejected / withdrawn / expired", str(by_status.get("REJECTED", 0) + by_status.get("WITHDRAWN", 0)
+                                                          + by_status.get("EXPIRED", 0)))],
+                   "aeroturn/hitl.py (not callable by the agent)")
+        guard_card(g5, 5, "Logging", chain["ok"],
+                   "Every tool call, guard verdict, human decision and transaction is appended to a hash-chained audit "
+                   "log. Editing any entry breaks the chain.",
+                   [("audit entries", str(chain["entries"])), ("chain", "intact" if chain["ok"] else "BROKEN"),
+                    ("head", str(chain.get("head", ""))[:16])],
+                   "aeroturn/audit.py · Audit & data tab")
+        with g6.container(border=True):
+            st.markdown("<div class='sec'>Tool access classes</div>", unsafe_allow_html=True)
+            st.dataframe(pd.DataFrame([{"Tool": n_, "Class": t_["access"].upper()} for n_, t_ in tools.TOOLS.items()]),
+                         hide_index=True, height=255)
+
+# ===========================================================================
+# PASSENGERS
+# ===========================================================================
+with tabs[3]:
+    if tabs[3].open:
         only = st.toggle("Only disrupted passengers", value=True)
         base = {p["pax_id"]: p for p in SNAP["orig"]["passengers"]}
         rows = []
@@ -1017,8 +1113,8 @@ with tabs[2]:
 # ===========================================================================
 # CREW & DUTY
 # ===========================================================================
-with tabs[3]:
-    if tabs[3].open:
+with tabs[4]:
+    if tabs[4].open:
         sc = SNAP["crew"]
         st.markdown(f"<div class='sec'>Standby captain matcher · {html.escape(sc['summary'])}</div>",
                     unsafe_allow_html=True)
@@ -1054,8 +1150,8 @@ with tabs[3]:
 # ===========================================================================
 # TURNAROUND & MX
 # ===========================================================================
-with tabs[4]:
-    if tabs[4].open:
+with tabs[5]:
+    if tabs[5].open:
         st.plotly_chart(gantt(), config=PLOT_CFG, theme=None, key="gantt2")
         st.dataframe(pd.DataFrame([{"Task": t["task_id"], "Name": t["name"], "Start": t["start_hm"], "End": t["end_hm"],
                                     "Min": t["duration_min"], "Slack": t["slack_min"],
@@ -1079,8 +1175,8 @@ with tabs[4]:
 # ===========================================================================
 # COST & NETWORK
 # ===========================================================================
-with tabs[5]:
-    if tabs[5].open:
+with tabs[6]:
+    if tabs[6].open:
         cst = SNAP["cost"]
         st.plotly_chart(cost_chart(), config=PLOT_CFG, theme=None, key="cost2")
         st.markdown("<div class='sec'>Hold a departing connection, or rebook its passengers?</div>",
@@ -1107,8 +1203,8 @@ with tabs[5]:
 # ===========================================================================
 # AUDIT & DATA
 # ===========================================================================
-with tabs[6]:
-    if tabs[6].open:
+with tabs[7]:
+    if tabs[7].open:
         ch_ = SNAP["chain"]
         q = st.columns([3, 1])
         q[0].markdown(f"Hash chain **{'intact' if ch_['ok'] else 'BROKEN at ' + str(ch_.get('broken_at_seq'))}** · "

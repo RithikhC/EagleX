@@ -44,7 +44,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 - Network cost, including the EK813 delay, the knock-on and the hold, falls from AED 206k to AED 121k.
 - All money is in UAE dirhams. EU261 amounts are fixed in EUR by law and converted at 1 EUR = 4.10 AED
   (`aeroturn/config.py`).
-- 79 automated tests pass, including 13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
+- 86 automated tests pass, including 13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
 
 ---
 
@@ -54,7 +54,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 pip install -r requirements.txt
 streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
-python -m pytest -q           # 79 tests
+python -m pytest -q           # 86 tests
 ```
 
 ### Choose the brain (optional)
@@ -130,6 +130,8 @@ is shown to be identical before and after.
 | Vulnerable-passenger priority | `guards.pax_tier`, `_priority_inversions`, UMNR/MEDA/PRM rules; planner orders P1 → P4 | `test_priority.py` |
 | LLM cannot bypass | Sealed module (`GuardTamperError`), frozen dataclasses, `MappingProxyType`, SHA-256 pin, strict arg schemas, no override params | `test_guards.py::test_guards_cannot_be_mutated`, `test_agent.py` (fake LLM tries override, illegal crew, self-approval, fact-bearing templates) |
 | HITL for schedule / gate changes | `stage_controller_schedule_change` → `PENDING`; `hitl.approve()` is not in the tool registry, refuses non-human identities, re-runs the guards and enforces decision deadlines (gate 15:15, holds STD−5) | `test_hitl.py` (incl. hold approve, reject and expiry) |
+| Prompt-injection defence | `sanitize.py`: passenger remarks and notes are untrusted; instruction-like text is withheld before any tool result reaches the LLM and logged as `INJECTION_BLOCKED`; notification templates cannot carry facts | `test_guardrails.py` |
+| Read/write separation | Every tool is `read`, `propose` or `write` (`tools.TOOLS[...]['access']`); the planner's fact-gathering phase is locked to read tools; approval is not a tool | `test_guardrails.py` (read tools leave the state fingerprint unchanged) |
 | Decisions stay legal as facts change | `reconcile.reconcile`: re-checks every pending change, withdraws what became illegal, stages the next legal option or escalates | `test_edge_cases.py` (13 cases) |
 
 ## Core and stretch goals
@@ -252,7 +254,7 @@ aeroturn/
   faults.py · lab.py       chaos injection · sandboxed experiments
 data/                      pristine SQLite + JSON snapshot
 docs/                      DEMO_SCRIPT.md · PITCH.md · ARCHITECTURE.md
-tests/                     79 pytest tests
+tests/                     86 pytest tests
 ```
 
 ## Deploying the live demo (Streamlit Community Cloud, free)

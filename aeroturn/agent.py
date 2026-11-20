@@ -143,10 +143,11 @@ class AeroTurnAgent:
         if self.on_event:
             self.on_event(ev)
 
-    def call(self, name: str, args: dict | None = None) -> dict:
+    def call(self, name: str, args: dict | None = None, allowed: tuple[str, ...] = tools.ACCESS_CLASSES) -> dict:
         args = args or {}
-        self.emit("tool_call", name, args)
-        result = tools.dispatch(self.conn, name, args, actor=self.actor)
+        acc = tools.TOOLS.get(name, {}).get("access", "?").upper()
+        self.emit("tool_call", f"{acc} · {name}", args)
+        result = tools.dispatch(self.conn, name, args, actor=self.actor, allowed=allowed)
         self._classify(name, result)
         return result
 
@@ -233,13 +234,14 @@ class AeroTurnAgent:
     # ------------------------------------------------------------------ LLM: plan-and-execute
     def _facts_digest(self) -> dict:
         """Read-only tool calls (code) that give the planner everything it needs in one compact message."""
-        self.emit("system", "Code gathers the facts for the planner: 6 read-only tool calls")
-        s = self.call("get_turnaround_and_crew_state")
-        g = self.call("evaluate_gate_options")
-        h = self.call("evaluate_connection_holds")
-        sc = self.call("find_standby_crew", {"flight_no": "EK813", "rank": "CPT"})
-        cpm = self.call("get_turnaround_critical_path", {"flight_no": "EK813"})
-        vul = self.call("list_disrupted_passengers", {"max_tier": 2})
+        self.emit("system", "Code gathers the facts for the planner: 6 tool calls, locked to read-only tools")
+        ro = ("read",)
+        s = self.call("get_turnaround_and_crew_state", allowed=ro)
+        g = self.call("evaluate_gate_options", allowed=ro)
+        h = self.call("evaluate_connection_holds", allowed=ro)
+        sc = self.call("find_standby_crew", {"flight_no": "EK813", "rank": "CPT"}, allowed=ro)
+        cpm = self.call("get_turnaround_critical_path", {"flight_no": "EK813"}, allowed=ro)
+        vul = self.call("list_disrupted_passengers", {"max_tier": 2}, allowed=ro)
         unfit = db.one(self.conn, "SELECT c.crew_id, c.name, c.notes FROM crew_assignments a JOIN crew c "
                                   "ON c.crew_id = a.crew_id WHERE a.flight_id = 'EK813-1121' AND a.status = 'REMOVED'")
         mx = [m for m in s["maintenance"] if m["dispatch_blocking"]]

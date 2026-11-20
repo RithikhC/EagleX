@@ -22,7 +22,7 @@ import sqlite3
 import uuid
 from datetime import datetime
 
-from . import audit, config, costs, crew, db, faults, guards, recovery, turnaround
+from . import audit, config, costs, crew, db, faults, guards, recovery, sanitize, turnaround
 from .facts import bag_counts, crew_facts, mx_facts, option_facts, pax_facts
 from .timeutil import dur, fmt, hm, is_iso, minutes, parse, plus
 
@@ -735,18 +735,21 @@ def _schema(props: dict, required: list[str] | None = None) -> dict:
 TOOLS: dict[str, dict] = {
     "get_turnaround_and_crew_state": {
         "fn": get_turnaround_and_crew_state,
+        "access": "read",
         "description": "Read the live picture: late inbound EK812, inbound crew FDP margin, outbound rotation EK813 "
                        "(critical path, crew issues), maintenance items, connection risk. Call this first.",
         "parameters": _schema({}),
     },
     "list_disrupted_passengers": {
         "fn": list_disrupted_passengers,
+        "access": "read",
         "description": "List passengers whose connections break, with priority tier, SSR codes, MCT and bags.",
         "parameters": _schema({"only_at_risk": {"type": "boolean"}, "max_tier": {"type": "integer", "minimum": 1,
                                                                                  "maximum": 4}}),
     },
     "evaluate_gate_options": {
         "fn": evaluate_gate_options,
+        "access": "read",
         "description": "Compare arrival gate options for EK812 (crew FDP at on-blocks, stand availability, "
                        "misconnects) and get the recommended legal gate.",
         "parameters": _schema({"exclude": {"type": "array", "items": {"type": "string"},
@@ -754,12 +757,14 @@ TOOLS: dict[str, dict] = {
     },
     "evaluate_connection_holds": {
         "fn": evaluate_connection_holds,
+        "access": "read",
         "description": "For each departing connection that breaks: minutes of hold needed, hold cost (aircraft + "
                        "onboard passengers) vs rebooking cost (EU261 + care), and which holds are recommended.",
         "parameters": _schema({}),
     },
     "find_standby_crew": {
         "fn": find_standby_crew,
+        "access": "read",
         "description": "Find the nearest LEGAL standby crew member of a rank for a flight. Every candidate is "
                        "checked against flight-time limitations.",
         "parameters": _schema({"flight_no": {"type": "string"}, "rank": {"type": "string", "enum": ["CPT", "FO"]}},
@@ -767,12 +772,14 @@ TOOLS: dict[str, dict] = {
     },
     "get_turnaround_critical_path": {
         "fn": get_turnaround_critical_path,
+        "access": "read",
         "description": "Below-wing turnaround critical path (CPM) for a departing rotation; gives the earliest "
                        "achievable off-block time (EOBT).",
         "parameters": _schema({"flight_no": {"type": "string"}}, ["flight_no"]),
     },
     "stage_controller_schedule_change": {
         "fn": stage_controller_schedule_change,
+        "access": "propose",
         "description": "STAGE (never execute) a gate reassignment, crew swap, retime or connection hold for the human "
                        "Operations Controller. details: GATE_REASSIGNMENT {new_gate}; CREW_SWAP "
                        "{remove_crew_id, add_crew_id, role}; RETIME {new_etd 'HH:MM'}; HOLD_FLIGHT {hold_min}.",
@@ -785,6 +792,7 @@ TOOLS: dict[str, dict] = {
     },
     "propose_departure": {
         "fn": propose_departure,
+        "access": "propose",
         "description": "Request a departure release for a flight at an off-block time 'HH:MM' with optional crew_ids. "
                        "Guards check crew duty limits, rest, ratings, complement, maintenance CRS and the critical path.",
         "parameters": _schema({"flight_no": {"type": "string"}, "off_blocks": {"type": "string"},
@@ -793,12 +801,14 @@ TOOLS: dict[str, dict] = {
     },
     "plan_passenger_recovery": {
         "fn": plan_passenger_recovery,
+        "access": "propose",
         "description": "Build a priority-protected rebooking plan for all disrupted passengers (vulnerable first, "
                        "passenger-specific MCT, PNR integrity, bags follow passengers). Returns plan_id.",
         "parameters": _schema({"objective": {"type": "string", "enum": list(recovery.OBJECTIVES)}}),
     },
     "execute_atomic_passenger_rebook": {
         "fn": execute_atomic_passenger_rebook,
+        "access": "write",
         "description": "Execute a rebooking plan (plan_id) or explicit assignments [{pax_id, flight, seat_no?, cabin?}] "
                        "as ONE atomic transaction (seats + bags). On failure everything rolls back; re-plan and retry.",
         "parameters": _schema({
@@ -811,6 +821,7 @@ TOOLS: dict[str, dict] = {
     },
     "send_passenger_notifications": {
         "fn": send_passenger_notifications,
+        "access": "write",
         "description": "Send rebooking notifications. Provide templates per category (UMNR_GUARDIAN, MEDICAL, PRM, "
                        "FAMILY, PREMIUM, STANDARD). Use ONLY placeholders {first_name} {last_name} {pnr} {new_flight} "
                        "{dest_city} {dep_time} {arr_time} {seat} {gate} {bag_count} {assistance}; never write "
@@ -819,16 +830,25 @@ TOOLS: dict[str, dict] = {
     },
     "compute_disruption_cost": {
         "fn": compute_disruption_cost,
+        "access": "read",
         "description": "EU261 / duty-of-care / delay cost of the recovery vs legacy auto-reprotection, outbound "
                        "rotation knock-on, and connection-hold analysis.",
         "parameters": _schema({"plan_id": {"type": "string"}}),
     },
     "get_controller_queue": {
         "fn": get_controller_queue,
+        "access": "read",
         "description": "Read the status of changes staged for the Operations Controller.",
         "parameters": _schema({}),
     },
 }
+
+# Read/write separation. Every tool belongs to exactly one class:
+#   read    : looks at state, changes nothing (verified by test against the state fingerprint)
+#   propose : creates a proposal or a draft plan for a human or a later step; operational state is untouched
+#   write   : changes operational state, always guarded and atomic (rebooking, notifications)
+# Approving a proposal is not a tool at all: only a named human can do it (hitl.approve).
+ACCESS_CLASSES = ("read", "propose", "write")
 
 # Tools that accept an `actor` keyword (filled in by the dispatcher, never by the LLM).
 _ACTOR_TOOLS = {"stage_controller_schedule_change", "propose_departure", "plan_passenger_recovery",
@@ -868,12 +888,22 @@ def validate_args(schema: dict, args: dict) -> list[str]:
     return errs
 
 
-def dispatch(conn: sqlite3.Connection, name: str, args: dict | None, actor: str = "AGENT") -> dict:
-    """The single choke-point between the LLM and the system."""
+def dispatch(conn: sqlite3.Connection, name: str, args: dict | None, actor: str = "AGENT",
+             allowed: tuple[str, ...] = ACCESS_CLASSES) -> dict:
+    """The single choke-point between the LLM and the system.
+
+    Order: known tool -> access class allowed in this phase -> strict argument schema -> audit -> tool (whose
+    guards decide what is legal) -> untrusted free text scrubbed before the result goes back to the LLM.
+    """
     args = args or {}
     if name not in TOOLS:
         audit.log(conn, actor, "UNKNOWN_TOOL", {"name": name})
         return {"status": "REJECTED", "error": f"unknown tool '{name}'. Available: {sorted(TOOLS)}"}
+    access = TOOLS[name]["access"]
+    if access not in allowed:
+        audit.log(conn, actor, f"REJECTED_ACCESS {name}", {"access": access, "allowed": list(allowed)})
+        return {"status": "REJECTED", "error": f"{name} is a {access} tool; this phase may only use "
+                                               f"{', '.join(allowed)} tools"}
     errs = validate_args(TOOLS[name]["parameters"], args)
     if errs:
         audit.log(conn, actor, f"REJECTED_ARGS {name}", {"errors": errs})
@@ -881,8 +911,13 @@ def dispatch(conn: sqlite3.Connection, name: str, args: dict | None, actor: str 
     call = dict(args)
     if name in _ACTOR_TOOLS:
         call["actor"] = actor
-    audit.log(conn, actor, f"CALL {name}", args)
+    audit.log(conn, actor, f"CALL {name}", args | {"_access": access})
     try:
-        return TOOLS[name]["fn"](conn, **call)
+        result = TOOLS[name]["fn"](conn, **call)
     except ToolError as exc:
         return {"status": "ERROR", "error": str(exc)}
+    hits: list[dict] = []
+    result = sanitize.scrub(result, hits)
+    if hits:
+        sanitize.log_hits(conn, hits, name)
+    return result

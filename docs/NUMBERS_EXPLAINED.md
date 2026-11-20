@@ -221,7 +221,7 @@ EK813 itself pays no EU261: it departs Dubai on a non-EU airline (Art. 3(1)).
 | 15 violations | The naive revenue-first plan: 11 vulnerable passengers served after less vulnerable ones (PAX-001), and one each of the minor, medical, connection-time and family-split rules |
 | 6 reverted, step 7 | In the rollback demo, the injected seat conflict hits the 7th booking; the 6 already written are undone |
 | 13 / 67 | Edge cases / checks; 9 resolved automatically, 4 escalated |
-| 79 | Automated tests |
+| 86 | Automated tests |
 
 Regenerate any of this yourself: `python run_demo.py --yes` prints every verdict, and the 💶 *Cost & network* tab
 shows the per-passenger table behind sections 5 and 6.
