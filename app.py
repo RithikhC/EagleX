@@ -1084,7 +1084,7 @@ with tabs[2]:
                    "aeroturn/audit.py · Audit & data tab")
         with g6.container(border=True):
             st.markdown("<div class='sec'>Tool access classes</div>", unsafe_allow_html=True)
-            st.dataframe(pd.DataFrame([{"Tool": n_, "Class": t_["access"].upper()} for n_, t_ in tools.TOOLS.items()]),
+            st.dataframe(pd.DataFrame([{"Tool": n_, "Class": str(t_.get("access", "?")).upper()} for n_, t_ in tools.TOOLS.items()]),
                          hide_index=True, height=255)
 
 # ===========================================================================
