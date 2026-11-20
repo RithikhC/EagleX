@@ -201,7 +201,7 @@ pres.addSection({ title: "Scenarios" });
   shot(s, "agent_rowC", { x: M, y: 1.6, w: W - 2 * M, h: 3.85 }, { align: "left", alt: "Event feed, controller queue and guard board" });
   const cap = [
     ["Live event feed", "LLM decisions, tool calls, guard blocks, commit and rollback, newest first"],
-    ["Controller queue", "Gate, hold, crew swap and retime wait for a named human"],
+    ["Approval queue", "Gate, hold, crew swap and retime wait for a named human"],
     ["Guard board", "Every refusal with its rule code: the LLM is corrected, not trusted"],
   ];
   cap.forEach(([h, d], i) => {
@@ -215,7 +215,7 @@ pres.addSection({ title: "Scenarios" });
 
 // ------------------------------------------------------------------ 6. scenario 2
 {
-  const s = content("Scenarios", "SCENARIO 2 · DUTY BREACH · NO CRS · OVERRIDE", "Guards stop a rogue AI");
+  const s = content("Scenarios", "SCENARIO 2 · USE TIRED CREW · SKIP SIGN-OFF · TRY AN OVERRIDE", "Guards stop a rogue AI");
   const rows = [["duty_breach", "Dispatch EK813 with the tired inbound crew"], ["no_crs", "Dispatch before the hydraulic sign-off"], ["override", "Call a tool with override=True"]];
   let y = 1.6;
   rows.forEach(([n, t]) => {
@@ -233,7 +233,7 @@ pres.addSection({ title: "Scenarios" });
 
 // ------------------------------------------------------------------ 7. scenario 3
 {
-  const s = content("Scenarios", "SCENARIO 3 · ROLLBACK", "All or nothing: a failure leaves no trace");
+  const s = content("Scenarios", "SCENARIO 3 · CRASH MID-SAVE", "All or nothing: a failure leaves no trace");
   shot(s, "rollback", { x: M, y: 1.6, w: W - 2 * M, h: 1.8 }, { align: "left", alt: "Rollback banner" });
   const layers = [
     ["Guard pre-check", "The whole batch is validated before any write"],
@@ -254,7 +254,7 @@ pres.addSection({ title: "Scenarios" });
 
 // ------------------------------------------------------------------ 8. scenario 4
 {
-  const s = content("Scenarios", "SCENARIO 4 · VULNERABLE PRIORITY · NAIVE AI", "Vulnerable passengers first, always");
+  const s = content("Scenarios", "SCENARIO 4 · VULNERABLE PRIORITY · NAIVE AI VS RULES", "Vulnerable passengers first, always");
   shot(s, "priority", { x: M, y: 1.6, w: 7.6, h: 3.6 }, { align: "left", alt: "Recovery flow and priority queue" });
   shot(s, "naive", { x: M, y: 5.35, w: 7.6, h: 1.5 }, { align: "left", alt: "Naive optimiser blocked" });
   points(s, [
@@ -268,7 +268,7 @@ pres.addSection({ title: "Scenarios" });
 
 // ------------------------------------------------------------------ 9. scenario 5
 {
-  const s = content("Scenarios", "SCENARIO 5 · APPROVE", "A human approves every network change");
+  const s = content("Scenarios", "SCENARIO 5 · APPROVE ALL", "A human approves every network change");
   shot(s, "approve", { x: M, y: 1.6, w: W - 2 * M, h: 2.3 }, { align: "left", alt: "Controller approval banner and KPIs" });
   const items = [
     ["Staged, never executed", "Gate, hold, crew swap and retime wait in the controller queue"],
@@ -288,7 +288,7 @@ pres.addSection({ title: "Scenarios" });
 
 // ------------------------------------------------------------------ 10. scenario 6
 {
-  const s = content("Scenarios", "SCENARIO 6 · RELEASE", "Maintenance sign-off, then departure release");
+  const s = content("Scenarios", "SCENARIO 6 · SIGN-OFF & RELEASE", "Maintenance sign-off, then departure release");
   shot(s, "release", { x: M, y: 1.6, w: W - 2 * M, h: 2.95 }, { align: "left", alt: "Release banner and KPIs" });
   const steps = [
     ["Clock to 16:30", "The hydraulic inspection can now be finished", C.accent2, C.background1],

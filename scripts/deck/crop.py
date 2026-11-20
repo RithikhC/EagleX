@@ -18,7 +18,14 @@ LEFT, RIGHT = 80, 1520   # content column of the dashboard (css px)
 
 
 def load(name):
-    return Image.open(SHOTS / f"{name}.png").convert("RGB"), json.loads((SHOTS / f"{name}.json").read_text())
+    return Image.open(SHOTS / f"{name}.png").convert("RGB"), _fill(json.loads((SHOTS / f"{name}.json").read_text()))
+
+
+def _fill(r):
+    """Panels in the middle column share x/width with the critical-path panel (older captures lack 'ctrl')."""
+    if r.get("ctrl") is None and r.get("gantt") and r.get("feed"):
+        r["ctrl"] = [r["gantt"][0], r["feed"][1], r["gantt"][2], r["feed"][3]]
+    return r
 
 
 def save(img, rect, out, pad=6):

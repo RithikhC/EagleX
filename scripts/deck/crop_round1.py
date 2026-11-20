@@ -13,7 +13,14 @@ S, MAXW, INSET, GAP, LEFT, RIGHT = 2, 2400, 17, 16, 80, 1520
 
 
 def load(n):
-    return Image.open(SHOTS / f"{n}.png").convert("RGB"), json.loads((SHOTS / f"{n}.json").read_text())
+    return Image.open(SHOTS / f"{n}.png").convert("RGB"), _fill(json.loads((SHOTS / f"{n}.json").read_text()))
+
+
+def _fill(r):
+    """Panels in the middle column share x/width with the critical-path panel (older captures lack 'ctrl')."""
+    if r.get("ctrl") is None and r.get("gantt") and r.get("feed"):
+        r["ctrl"] = [r["gantt"][0], r["feed"][1], r["gantt"][2], r["feed"][3]]
+    return r
 
 
 def save(img, rect, out, pad=6):

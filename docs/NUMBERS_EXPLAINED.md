@@ -18,11 +18,11 @@ Times are Dubai local (GST). Money is in UAE dirhams (AED).
 
 | Number on screen | Where it comes from |
 |---|---|
-| **EK812 in-block 15:20, +75 min** | Scheduled arrival 14:05; the aircraft lands at 15:12 and taxis 8 minutes to stand C31. 15:20 − 14:05 = 75 minutes, as in the brief |
-| **Inbound crew FDP 20 min, limit 15:40** | The crew reported at 04:40 and flew 2 sectors. The EASA table gives 11:00 for a duty starting between 00:00 and 04:59 (the night hours count against you). 04:40 + 11:00 = **15:40**. On blocks at 15:20 leaves **20 min** |
+| **EK812 at the stand 15:20, +75 min** | Scheduled arrival 14:05; the aircraft lands at 15:12 and taxis 8 minutes to stand C31. 15:20 − 14:05 = 75 minutes, as in the brief |
+| **Crew duty time left 20 min, limit 15:40** (FDP) | The crew reported at 04:40 and flew 2 sectors. The EASA table gives 11:00 for a duty starting between 00:00 and 04:59 (the night hours count against you). 04:40 + 11:00 = **15:40**. On blocks at 15:20 leaves **20 min** |
 | **45 connections at risk (of 280)** | A connection breaks when in-block time + the passenger's minimum connection time (MCT) is later than the onward departure, or when bags have less than 45 min. With in-block 15:20, 45 of the 280 connecting passengers fail that test |
 | **10 vulnerable** | Of the 45, 10 are tier P1/P2: unaccompanied minors, medical case, wheelchair users, blind, pregnant, infant |
-| **EK813 off-blocks 17:15 (+65)** | Critical path, section 4. Scheduled 16:10, so 65 minutes late |
+| **EK813 departure 17:15 (+65)** | Critical path, section 4. Scheduled 16:10, so 65 minutes late |
 | **MX-0412 Open / NO-GO** | The hydraulic defect blocks dispatch until a B1 engineer signs the certificate of release to service |
 
 **Minimum connection time per passenger** (`guards.pax_mct_minutes`):

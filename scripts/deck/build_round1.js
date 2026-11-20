@@ -366,8 +366,8 @@ function slide(title, criterion) {
 // ------------------------------------------------------------------ 10. user experience
 {
   const s = slide("User experience", "UX · 20%");
-  const items = [["ux_1", "Open the link and press Run recovery agent. One screen shows the whole disruption: red arcs are broken connections"],
-    ["ux_2", "The agent explains every step in the live feed. Each network change waits in the controller queue with Approve / Reject"],
+  const items = [["ux_1", "Open the link: a Start-here guide explains the situation in four clicks. Press Run recovery agent"],
+    ["ux_2", "The agent explains every step in the live feed. Each network change waits in the approval queue with Approve / Reject"],
     ["ux_3", "Approve and release: 0 connections at risk, 10/10 vulnerable passengers safe, EK813 released, AED saved"]];
   const cw = (W - 2 * M - 2 * 0.35) / 3, y = 1.5;
   items.forEach(([n, d], i) => {
@@ -377,7 +377,7 @@ function slide(title, criterion) {
     text(s, d, { x, y: y + 3.5, w: cw, h: 0.95 }, { fontSize: 13.5, color: C.dk2 });
   });
   card(s, M, 6.0, W - 2 * M, 0.62, "easy");
-  text(s, "No training or install: one screen, one button per scenario, plain-language banners, a private copy per visitor.",
+  text(s, "No training or install: a Start-here guide, plain-language buttons and tiles with hover help, a private copy per visitor.",
     { x: M + 0.3, y: 6.0, w: W - 2 * M - 0.6, h: 0.62 }, { fontSize: 15, color: C.text1, valign: "middle", bold: true });
 }
 
@@ -412,9 +412,9 @@ function slide(title, criterion) {
     { text: "Contact:  ", options: { bold: true, color: C.text1 } },
     { text: EMAIL, options: { color: C.accent1, hyperlink: { url: `mailto:${EMAIL}` } } }],
   { x: M + 0.4, y: 1.65, w: W - 2 * M - 0.8, h: 2.1 }, { fontSize: 21, valign: "middle", paraSpaceAfter: 10 });
-  const steps = [["Open the link", "The dashboard opens at 14:50 with the disruption on screen"],
+  const steps = [["Open the link", "The Start-here guide explains the disruption and the four clicks"],
     ["Press Run recovery agent", "Watch the LLM plan, the guards check and the rebooking commit"],
-    ["Press Approve, then Release", "You are the controller. The red buttons show the guards stopping a rogue AI"]];
+    ["Approve all, then Sign-off & release", "You are the controller. The Try-to-break-it row shows the guards stopping a rogue AI"]];
   const cw = (W - 2 * M - 2 * 0.3) / 3;
   steps.forEach(([h, d], i) => {
     const x = M + i * (cw + 0.3), y = 4.15;

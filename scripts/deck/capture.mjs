@@ -73,7 +73,7 @@ async function rects() {
       kpis: union([...document.querySelectorAll('.kpi')]),
       map: R(sec('Connection network')), gantt: R(sec('EK813 turnaround')), crew: R(sec('Crew duty legality')),
       flow: R(sec('Passenger recovery flow')), queue: R(sec('Priority queue')), cost: R(sec('Compensation')),
-      feed: R(sec('Live event feed')), ctrl: R(sec('Operations Controller queue')), guard: R(sec('Guard interventions')),
+      feed: R(sec('Live event feed')), ctrl: R(sec('Approval queue') || sec('Operations Controller queue')), guard: R(sec('Guard interventions')),
       page: [0, 0, document.documentElement.scrollWidth, Math.max(document.documentElement.scrollHeight, window.innerHeight)],
     }; })()`);
 }
@@ -113,11 +113,12 @@ if (stage === "all" || stage === "main") {
   await viewport(2300);
   await send("Page.navigate", { url: APP }); await idle(90000, 2500);
   await shot("01_initial");
+  await click("Hide guide"); await idle();
   await press("Run recovery agent", "Recovery run complete", 420000);
   await shot("02_agent");
-  for (const [b, n] of [["Duty breach", "03_duty"], ["No CRS", "04_nocrs"], ["Override", "05_override"],
-                        ["Rollback", "06_rollback"], ["Naive AI", "07_naive"], ["✅ Approve", "08_approve"],
-                        ["🔧 Release", "09_release"]]) {
+  for (const [b, n] of [["Use tired crew", "03_duty"], ["Skip engineer sign-off", "04_nocrs"], ["Try an override", "05_override"],
+                        ["Crash mid-save", "06_rollback"], ["Naive AI vs rules", "07_naive"], ["Approve all", "08_approve"],
+                        ["Sign-off & release", "09_release"]]) {
     await press(b); await shot(n);
   }
   await viewport(1250);
@@ -149,8 +150,9 @@ if (stage === "all" || stage === "main") {
 if (stage === "banners") {
   await viewport(1400);
   await send("Page.navigate", { url: APP }); await idle(90000, 2500);
-  for (const [b, n] of [["Duty breach", "b_duty"], ["No CRS", "b_nocrs"], ["Override", "b_override"],
-                        ["Naive AI", "b_naive"]]) {
+  await click("Hide guide"); await idle();
+  for (const [b, n] of [["Use tired crew", "b_duty"], ["Skip engineer sign-off", "b_nocrs"], ["Try an override", "b_override"],
+                        ["Naive AI vs rules", "b_naive"]]) {
     await press(b); await shot(n);
   }
 }
@@ -159,8 +161,9 @@ if (stage === "banners") {
 if (stage === "guard") {
   await viewport(1250);
   await send("Page.navigate", { url: APP }); await idle(90000, 2500);
+  await click("Hide guide"); await idle();
   await press("Run recovery agent", "Recovery run complete", 420000);
-  await press("Duty breach"); await press("No CRS"); await press("Override"); await press("✅ Approve");
+  await press("Use tired crew"); await press("Skip engineer sign-off"); await press("Try an override"); await press("Approve all");
   await click("Guardrails", { selector: "[role=tab]" }); await idle();
   await click("Injection test"); await idle(30000); await sleep(1500);
   await shot("15_guard");
@@ -170,6 +173,7 @@ if (stage === "guard") {
 if (stage === "all" || stage === "whatif") {
   await viewport(2300);
   await send("Page.navigate", { url: APP }); await idle(90000, 2500);
+  await click("Hide guide"); await idle();
   await press("Run recovery agent", "Recovery run complete", 420000);
   await click("What if"); await sleep(1200);
   const before = await bannerText();

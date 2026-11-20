@@ -288,19 +288,18 @@ Every dataset, public source (EASA flight-time rules, Part-66, ICAO Annex 17, EU
 
 ## The dashboard
 
-One screen, with a scenario bar across the top. Each button runs one judged scenario against the live state,
-and the panels update in place.
+One screen. A **Start-here guide** at the top explains the situation and the four clicks that show everything (it can be hidden and reopened with ❔ Guide). The scenario bar has two labelled rows, **Recover the flight** and **Try to break it**; each button runs one scenario against the live state, every tile and button explains itself on hover, and the panels update in place.
 
 | Button | Scenario | What the dashboard shows |
 |---|---|---|
-| ▶ Run recovery agent (+ Chaos) | The LLM agent runs the full recovery; a seat is sold mid-batch | Incident banner, event feed (LLM ↔ tools ↔ guards), KPIs go 45 → 0 at risk, 0/10 → 10/10 vulnerable safe, map arcs turn green |
-| ⛔ Duty breach | Rogue LLM dispatches EK813 with the inbound crew | Banner: BLOCKED, FTL-001 for every crew member + TURN-001 + MX-001 |
-| ⛔ No CRS | Legal crew, but the hydraulic CRS is unsigned | Banner: BLOCKED, MX-001 |
-| ⛔ Override | Tool call with `override=True` | Banner: REJECTED, no override exists |
-| ⚛ Rollback | Seat conflict at step 7 on a sandbox copy | Banner: rolled back, 0 double bookings, 0 orphaned bags, state identical, retry committed |
-| ⚖ Naive AI | Revenue-first optimiser vs the same guards | Banner: 15 violations (PAX-001/002/003/004/006), AeroTurn plan committed |
-| ✅ Approve | The human controller approves the queue | Gate moves to C31, crew swap and retime applied |
-| 🔧 Release | Clock to inspection end; B2 then B1 engineer sign; departure release | MX-002 refusal, CRS signed, EK813 released |
+| ▶ Run recovery agent (+ Chaos test) | The LLM agent runs the full recovery; a seat is sold mid-batch | Incident banner, event feed (LLM ↔ tools ↔ guards), KPIs go 45 → 0 at risk, 0/10 → 10/10 vulnerable safe, map arcs turn green |
+| ⛔ Use tired crew | Rogue LLM dispatches EK813 with the inbound crew | Banner: BLOCKED, FTL-001 for every crew member + TURN-001 + MX-001 |
+| ⛔ Skip engineer sign-off | Legal crew, but the hydraulic CRS is unsigned | Banner: BLOCKED, MX-001 |
+| ⛔ Try an override | Tool call with `override=True` | Banner: REJECTED, no override exists |
+| ⚛ Crash mid-save | Seat conflict at step 7 on a sandbox copy | Banner: rolled back, 0 double bookings, 0 orphaned bags, state identical, retry committed |
+| ⚖ Naive AI vs rules | Revenue-first optimiser vs the same guards | Banner: 15 violations (PAX-001/002/003/004/006), AeroTurn plan committed |
+| ✅ Approve all | The human controller approves the queue | Gate moves to C31, crew swap and retime applied |
+| 🔧 Sign-off & release | Clock to inspection end; B2 then B1 engineer sign; departure release | MX-002 refusal, CRS signed, EK813 released |
 | 🌍 What if… | Inject a world event into this session (ATC hold +15 / +25, standby captain fatigued, leak found, diversion takes C31), or press Re-validate now | Banner lists what was withdrawn, re-staged, re-planned or escalated; the queue, KPIs and guard board update |
 | ↺ | Reset | Back to 14:50 |
 
@@ -312,7 +311,7 @@ Panels:
 - Priority queue in seat-allocation order
 - Compensation & care, legacy vs AeroTurn
 - Live event feed, rebuilt from the audit log after a reload
-- Controller queue with Approve / Reject
+- Approval queue (you are the controller) with Approve / Reject
 - Guard interventions, withdrawals and escalations
 
 The 🛡 **Guardrails** tab shows live evidence, from the session's own database and audit log, for each of the five University-track guardrails: deterministic validation, prompt-injection defence (with an injection test button), read/write separation, the human-in-the-loop pause and logging.

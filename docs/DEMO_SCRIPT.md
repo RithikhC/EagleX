@@ -17,7 +17,10 @@ answers for judges who challenge them.
 5. Backup if the browser dies: `python run_demo.py` in a terminal.
 
 The scenario bar, left to right:
-**▶ Run recovery agent · Chaos · ⛔ Duty breach · ⛔ No CRS · ⛔ Override · ⚛ Rollback · ⚖ Naive AI · ✅ Approve · 🔧 Release · 🌍 What if… · ↺**
+- Recover the flight: **▶ Run recovery agent · Chaos test · ✅ Approve all · 🔧 Sign-off & release · 🌍 What if… · ↺ Reset**
+- Try to break it: **⛔ Use tired crew · ⛔ Skip engineer sign-off · ⛔ Try an override · ⚛ Crash mid-save · ⚖ Naive AI vs rules**
+
+Press **Hide guide** on the Start-here panel before you present (❔ Guide brings it back).
 
 ---
 
@@ -46,7 +49,7 @@ KPIs flip to **0 CLEAR · 10/10 SAFE · 3 PENDING · about AED 83k SAVED**, and 
 
 ## 1:30 · Guards vs a rogue AI (60 s)
 
-Click **⛔ Duty breach**, then **⛔ No CRS**, then **⛔ Override**. Each one produces a red banner:
+Click **⛔ Use tired crew**, then **⛔ Skip engineer sign-off**, then **⛔ Try an override**. Each one produces a red banner:
 - FTL-001 for all 13 crew, plus TURN-001 and MX-001
 - MX-001 on its own
 - "unknown argument 'override': no overrides exist"
@@ -54,7 +57,7 @@ Click **⛔ Duty breach**, then **⛔ No CRS**, then **⛔ Override**. Each one 
 > "These rules are plain Python in a sealed module. Assigning to it raises an error, the file is SHA-256
 > pinned, and the agent refuses to start if anyone edits it. There is no override parameter anywhere."
 
-## 2:30 · ⚛ Rollback (40 s)
+## 2:30 · ⚛ Crash mid-save (40 s)
 
 Banner: **step 7 · 6 reverted · state identical YES · 0 double bookings · 0 orphaned bags · retry COMMITTED**.
 
@@ -70,12 +73,12 @@ whose lightest bands are P1.
 > after 22:00. Mr Qureshi in a wheelchair needs 80 minutes to connect, so the 16:35 Karachi flight is illegal
 > for him, though legal for others."
 
-Click **⚖ Naive AI**: "An unconstrained revenue-first optimiser gets **15 violations**. The same guard
+Click **⚖ Naive AI vs rules**: "An unconstrained revenue-first optimiser gets **15 violations**. The same guard
 blocks it."
 
 ## 4:00 · The controller (45 s)
 
-In the **Operations Controller queue**, press **Approve** on GATE_REASSIGNMENT (or **✅ Approve** for all).
+In the **Approval queue**, press **Approve** on GATE_REASSIGNMENT (or **✅ Approve all**).
 
 > "Approval re-runs the guards with fresh facts, and decisions expire: wait past 15:15 and the gate change
 > is dead, because the crew would be illegal by then. The agent has no way to approve anything."
@@ -91,7 +94,7 @@ For the full catalogue, open the **🧪 Edge cases** tab and press **▶ Run all
 checks, 9 resolved automatically, 4 escalated to humans. Open the EC-07 timeline to show the 3-minute EK346 hold
 that protects 10 passengers.
 
-## 4:45 · 🔧 Release (40 s)
+## 4:45 · 🔧 Sign-off & release (40 s)
 
 The banner shows, in order:
 1. Clock → 16:30
@@ -117,6 +120,6 @@ Point at **Compensation & care**: legacy AED 133k against AeroTurn AED 50k, with
 | Header says "offline policy" | Fine: same workflow, deterministic, labelled honestly. Or fix the key in Settings |
 | "rate limit, waiting Ns" in the feed | Groq free tier; it retries automatically within seconds |
 | Clicked out of order | **↺** resets instantly |
-| Gate approval says EXPIRED | The clock passed 15:15 (🔧 Release moves it to 16:30). Press ↺ and approve the gate before releasing |
+| Gate approval says EXPIRED | The clock passed 15:15 (🔧 Sign-off & release moves it to 16:30). Press ↺ and approve the gate before releasing |
 | Browser dies | `python run_demo.py` |
 | You injected a world event by mistake | **↺** resets; edge cases never touch the live session |
