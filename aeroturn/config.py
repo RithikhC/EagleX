@@ -47,3 +47,10 @@ MAX_RECOMMENDED_HOLD_MIN = 15     # commercial policy for suggesting a connectio
 MIN_HOLD_NET_SAVING_AED = 1000    # a hold must beat re-accommodation by this margin: the delay estimate is uncertain
 MEAL_VOUCHER_AED = 100            # right-to-care meal voucher per passenger
 HOTEL_NIGHT_AED = 550             # overnight accommodation + transport per passenger
+
+
+# Published cost-of-delay references (used on the real-data dashboard; never invented)
+A4A_COST_PER_MIN_USD = 98.41      # Airlines for America, U.S. passenger carrier delay cost per block minute, CY2025
+A4A_SOURCE = "https://airlines.org/dataset/u-s-passenger-carrier-delay-costs/"
+EUROCONTROL_TACTICAL_EUR_PER_MIN = 166   # EUROCONTROL Standard Inputs ed. 10 (2024), tactical delay at gate, 2022 prices
+EUROCONTROL_SOURCE = "https://ansperformance.eu/economics/cba/standard-inputs/latest/chapters/cost_of_delay.html"

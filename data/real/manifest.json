@@ -1,0 +1,36 @@
+{
+  "fetched_at": "2026-11-21 10:56",
+  "sources": [
+    {
+      "name": "BTS Reporting Carrier On-Time Performance, July 2024",
+      "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2024_7.zip",
+      "publisher": "US DOT Bureau of Transportation Statistics",
+      "licence": "Public domain (US Government work)",
+      "raw_bytes": 34427174,
+      "raw_sha256": "4d992fee134137b3fa43094d7e8cf4a8e6feaa6a422cffb4063f1ed6c7f3f731",
+      "rows_all_us_flights": 634613,
+      "processed_file": "data/real/bts_atl_2024_07.csv.gz",
+      "rows_processed": 60144,
+      "filter": "Origin == ATL or Dest == ATL"
+    },
+    {
+      "name": "OurAirports airports.csv",
+      "url": "https://davidmegginson.github.io/ourairports-data/airports.csv",
+      "publisher": "OurAirports",
+      "licence": "Public domain",
+      "raw_bytes": 12762645,
+      "raw_sha256": "eeb71bb033c440c9f542837f374ec460abdca649fb473f6c61dc9814ddf32ddf",
+      "processed_file": "data/real/airports.csv",
+      "rows_processed": 153
+    },
+    {
+      "name": "OpenSky Network live state vectors (DXB area)",
+      "url": "https://opensky-network.org/api/states/all?lamin=24.7&lomin=54.9&lamax=25.6&lomax=55.8",
+      "publisher": "OpenSky Network",
+      "licence": "Free for research and non-commercial use (OpenSky terms)",
+      "processed_file": "data/real/opensky_dxb_snapshot.json",
+      "rows_processed": 17,
+      "note": "The dashboard calls the live API; this snapshot is the fallback when it is unreachable"
+    }
+  ]
+}

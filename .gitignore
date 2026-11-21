@@ -9,3 +9,6 @@ venv/
 .env
 .DS_Store
 .claude/
+
+# large raw downloads (re-fetch with scripts/fetch_real_data.py)
+data/raw/
