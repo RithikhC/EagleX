@@ -27,6 +27,8 @@ All computed by `aeroturn/realdata.py` from `data/real/` (BTS on-time records fo
 | Break-even 0.12% at $300k/hub-year | **Assumption:** the price ($300k); real: the value pool |
 | Model cost ≈ $65 per hub-year | Real case volume (113/day) × measured $0.0016 per recovery |
 | ~7,000 cancellations, $380M | Delta SEC 8-K, Aug 2024 |
+| Live board, 12 Jul 2024 at 17:00: 616 departures flown, 75% on time, 36 turn alerts (18 critical) | `realdata.board()`: departures due by 17:00 that had left; alert = inbound aircraft 15+ min late that leaves less than 30 min before its next departure (30 min is our stated minimum-turn assumption) |
+| WN215 lands 237 min late; WN3275 (due 17:00) left 239 min late | Same BTS records (tail N287WN); "what really happened" is hindsight from the record |
 
 ## The scenario (Simulation page, sample data)
 
@@ -46,7 +48,7 @@ All computed by `aeroturn/realdata.py` from `data/real/` (BTS on-time records fo
 | AED 133,390 legacy vs AED 50,440 AeroTurn (−62%) | Cost model. EU261 amounts are set by law (EUR 250/400/600, Art. 7) at 1 EUR = 4.10 AED; care and delay rates are stated assumptions in `aeroturn/config.py`. Arithmetic in [NUMBERS_EXPLAINED §5](../NUMBERS_EXPLAINED.md) |
 | AED 82,950 saved | 133,390 − 50,440, shown on the "Passenger cost saved" tile. When the LLM also proposes the Sydney hold, the figure is AED 93,190 instead: it is the figure of that run |
 | 45/45 arrive the same day | Dataset plus plan: every rebooked flight lands on 21 Nov ([NUMBERS_EXPLAINED §5](../NUMBERS_EXPLAINED.md)) |
-| 116 tests, 13 edge cases, 5 curveballs; no rule broken | `python -m pytest -q` → 116 passed (includes the edge-case and curveball suites). "No rule broken" means no guard violation was ever committed in these tests; it does not mean the rules are certified |
+| 118 tests, 13 edge cases, 5 curveballs; no rule broken | `python -m pytest -q` → 118 passed (includes the edge-case and curveball suites). "No rule broken" means no guard violation was ever committed in these tests; it does not mean the rules are certified |
 
 ## Round 3: measured on real calls (`measurements.json`)
 
@@ -91,7 +93,7 @@ All computed by `aeroturn/realdata.py` from `data/real/` (BTS on-time records fo
 ## How to reproduce everything
 
 ```powershell
-python -m pytest -q                    # 116 tests
+python -m pytest -q                    # 118 tests
 python scripts/round3_evidence.py      # re-measures and rewrites measurements.json + log_evidence.txt
 python scripts/deck/render_log_png.py  # log_evidence.png from the text export
 ```

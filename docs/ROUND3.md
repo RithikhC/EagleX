@@ -17,8 +17,8 @@ not a new project.
 
 | Page | What it shows | Data |
 |---|---|---|
-| 📈 Dashboard | Atlanta, July 2024: on-time, cancellations, delay causes, knock-on turns, strata; KPI framework X (current) vs Y (AeroTurn) | Real: US DOT BTS, OurAirports, A4A |
-| 🧪 Simulation | The live agent: alert → plan → approval; Pilot console (burst, safety cases, audit, cost) | Sample scenario (no real personal data) |
+| 📈 Dashboard | **Live operations:** the OCC screen on a real day at Atlanta, replayed to the minute: departures, cancellations, late aircraft on a map, arrival and departure boards, and the queue of turns AeroTurn would raise (with what really happened). **Month review:** July 2024 on-time, causes, knock-on turns, strata, KPI framework X (current) vs Y (AeroTurn) | Real: US DOT BTS, OurAirports, A4A |
+| 🧪 Simulation | Six chapters: 1 recover the flight (alert → AI plan → rules → approval → outcome) · 2 under pressure (12 requests, one forced failure) · 3 safety & audit (three cases, audit trail, rogue-AI tests) · 4 the 5 curveballs · 5 our 13 edge cases · 6 cost & limits | Sample scenario (no real personal data) |
 | 🔌 Implementation | Live connectors with checks; AeroTurn's alert rule on real flights (223 cases on 19 July); integration map; rollout; pilot design | Real + live (OpenSky) |
 | 💼 Business model | Competitors (Amadeus, SITA, Lufthansa Systems, Sabre, Jeppesen), pricing, customer ROI, unit economics | Real + labelled assumptions |
 
@@ -41,9 +41,9 @@ rebooked with their bags, passenger messages and the cost in AED.
 
 | Area (weight) | What judges see | Where in the app |
 |---|---|---|
-| Workflow & resilience (30%) | Alert → plan in one run. 12 inbox requests back to back. A forced timeout on REQ-05 recovered by the backup model. | 📊 Operations (alert box, ▶ Run recovery agent, 🐢 Slow-model test) · 🚦 Pilot console › 1 · Burst |
-| Safety & audit (30%) | Safe auto-action, risky action paused (safe default: it expires and nothing changes), blocked attack, each with a log ID | 🚦 Pilot console › 2 · Safety and 3 · Audit trail |
-| Deployment, cost & limits (25%) | Measured tokens, latency and cost; deployment plan; limitations | 🚦 Pilot console › 4 · Cost · slides 7–9 |
+| Workflow & resilience (30%) | Alert → plan in one run. 12 inbox requests back to back. A forced timeout on REQ-05 recovered by the backup model. | 🧪 Simulation › 1 · Recover the flight · 2 · Under pressure |
+| Safety & audit (30%) | Safe auto-action, risky action paused (safe default: it expires and nothing changes), blocked attack, each with a log ID | 🧪 Simulation › 3 · Safety & audit |
+| Deployment, cost & limits (25%) | Measured tokens, latency and cost; deployment plan; limitations | 🧪 Simulation › 6 · Cost & limits · 🔌 Implementation · slides 7–9 |
 | Pitch & Q&A (15%) | Value and trade-offs | slide 10 · [PITCH_ROUND3.md](PITCH_ROUND3.md) |
 
 ## Resilience settings (`aeroturn/llm.py`)

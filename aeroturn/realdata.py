@@ -193,3 +193,106 @@ def turn_recovery(stratum: str | None = None) -> dict:
 def days_in(stratum: str | None) -> pd.Series:
     d = daily()
     return d.date if not stratum else d[d.stratum == stratum].date
+
+
+# ---------------------------------------------------------------------------
+# OCC live board: a real day replayed minute by minute (what a controller sees at a given local time)
+# ---------------------------------------------------------------------------
+MIN_TURN_MIN = 30    # same threshold as the knock-on rule above: a turn shorter than this cannot be done on time
+
+
+@lru_cache(maxsize=1)
+def airports() -> pd.DataFrame:
+    return pd.read_csv(REAL / "airports.csv").dropna(subset=["iata_code"]).set_index("iata_code")
+
+
+def _day(day: str) -> pd.DataFrame:
+    f = flights()
+    f = f[f.date == pd.Timestamp(day)].copy()
+    f["dep_act"] = f.sched_dep + pd.to_timedelta(f.DepDelay.fillna(0), unit="m")
+    f["arr_act"] = f.sched_arr + pd.to_timedelta(f.ArrDelay.fillna(0), unit="m")
+    return f
+
+
+def board(day: str, now: pd.Timestamp, ahead_min: int = 120) -> dict:
+    """Everything the live board shows at local time `now` on a real day.
+
+    Known at `now` (as in an operations centre): flights already flown, cancellations so far, and the ETA of
+    inbound aircraft (in operation it comes from ATC/ADS-B feeds; in this replay it is the arrival time in the
+    record). The turn alert uses only those facts; the outbound's real outcome is shown separately, as hindsight.
+    """
+    f = _day(day)
+    dep, arr = f[f.Origin == HUB], f[f.Dest == HUB]
+    horizon = now + pd.Timedelta(minutes=ahead_min)
+
+    due = dep[dep.sched_dep <= now]
+    flown = due[(due.Cancelled == 0) & (due.dep_act <= now)]
+    cancelled_so_far = int(due.Cancelled.sum())
+    ontime = int((flown.DepDelay < 15).sum())
+
+    # departure board: next departures, with what is known now
+    nxt = dep[(dep.sched_dep > now - pd.Timedelta(minutes=30)) & (dep.sched_dep <= horizon)].sort_values("sched_dep")
+
+    def dep_status(r) -> str:
+        if r.Cancelled:
+            return "Cancelled"
+        if r.dep_act <= now:
+            return "Departed" + (f" +{int(r.DepDelay)}" if r.DepDelay >= 15 else "")
+        return f"Delayed {r.dep_act:%H:%M}" if r.DepDelay >= 15 else "On time"
+
+    deps = pd.DataFrame({"Flight": nxt.flight, "To": nxt.Dest, "Aircraft": nxt.Tail_Number.fillna("—"),
+                         "Sched.": nxt.sched_dep.dt.strftime("%H:%M"),
+                         "Status": [dep_status(r) for r in nxt.itertuples()]})
+    deps = deps[~deps.Status.str.startswith("Departed")]
+
+    # inbound aircraft in the window, with their ETA
+    inb = arr[(arr.sched_arr > now - pd.Timedelta(minutes=30)) & (arr.sched_arr <= horizon)].sort_values("sched_arr")
+
+    def arr_status(r) -> str:
+        if r.Cancelled:
+            return "Cancelled"
+        if r.Diverted:
+            return "Diverted"
+        if r.arr_act <= now:
+            return "Landed" + (f" +{int(r.ArrDelay)}" if r.ArrDelay >= 15 else "")
+        return f"ETA {r.arr_act:%H:%M} (+{int(r.ArrDelay)})" if r.ArrDelay >= 15 else f"ETA {r.arr_act:%H:%M}"
+
+    arrs = pd.DataFrame({"Flight": inb.flight, "From": inb.Origin, "Aircraft": inb.Tail_Number.fillna("—"),
+                         "Sched.": inb.sched_arr.dt.strftime("%H:%M"),
+                         "Status": [arr_status(r) for r in inb.itertuples()]})
+    arrs = arrs[~arrs.Status.str.startswith("Landed")]
+    late_inbound = inb[(inb.Cancelled == 0) & (inb.ArrDelay >= 15) & (inb.arr_act > now)]
+
+    # turn alerts: a late inbound leaves less than the minimum turn before the same aircraft's next departure
+    rot = rotations()
+    rot = rot[rot.date == pd.Timestamp(day)].copy()
+    rot["eta"] = rot.sched_arr + pd.to_timedelta(rot.inbound_delay, unit="m")
+    rot["turn_left"] = (rot.sched_dep - rot.eta).dt.total_seconds() / 60
+    open_ = rot[(rot.inbound_delay >= 15) & (rot.turn_left < MIN_TURN_MIN) & (rot.sched_arr <= horizon)
+                & (rot.sched_dep + pd.to_timedelta(rot.outbound_delay, unit="m") > now)
+                & (rot.eta > now - pd.Timedelta(minutes=60))].sort_values("turn_left")
+    alerts = pd.DataFrame({
+        "Severity": ["Critical" if t < 0 else "At risk" for t in open_.turn_left],
+        "Aircraft": open_.Tail_Number, "Inbound": open_.inbound, "From": open_["from"],
+        "ETA": open_.eta.dt.strftime("%H:%M"), "Late by": open_.inbound_delay.astype(int),
+        "Outbound": open_.outbound, "To": open_["to"], "Sched. dep.": open_.sched_dep.dt.strftime("%H:%M"),
+        "Planned turn": open_.buffer_min.astype(int), "Turn left": open_.turn_left.astype(int),
+        "Actually left": open_.outbound_delay.astype(int)}).reset_index(drop=True)
+
+    # hour by hour: flown hours in colour, the rest as scheduled
+    hrs = dep.assign(h=dep.sched_dep.dt.floor("h"))
+    hourly = []
+    for h, g in hrs.groupby("h"):
+        if h + pd.Timedelta(hours=1) <= now:
+            ok = g[(g.Cancelled == 0) & (g.DepDelay < 15)]
+            hourly.append({"hour": h, "On time": len(ok), "Delayed ≥ 15 min": int(((g.Cancelled == 0) & (g.DepDelay >= 15)).sum()),
+                           "Cancelled": int(g.Cancelled.sum()), "Scheduled": 0})
+        else:
+            hourly.append({"hour": h, "On time": 0, "Delayed ≥ 15 min": 0, "Cancelled": 0, "Scheduled": len(g)})
+
+    return {"departures_due": int(len(due)), "flown": int(len(flown)), "ontime": ontime,
+            "ontime_pct": ontime / len(flown) * 100 if len(flown) else 0.0, "cancelled": cancelled_so_far,
+            "delay_minutes": float(flown.DepDelay.clip(lower=0).sum()),
+            "late_aircraft_minutes": float(arr[(arr.arr_act <= now) & (arr.ArrDelay >= 15)].LateAircraftDelay.sum()),
+            "total_departures": int(len(dep)), "deps": deps, "arrs": arrs, "late_inbound": late_inbound,
+            "alerts": alerts, "hourly": pd.DataFrame(hourly)}

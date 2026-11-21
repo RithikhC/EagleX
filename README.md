@@ -8,17 +8,19 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
-**Four pages:** 📈 **Dashboard** (real US DOT flight data for Atlanta, July 2024, and the KPI framework current
-workflow vs AeroTurn) · 🧪 **Simulation** (the live agent on a sample scenario) · 🔌 **Implementation** (live
+**Four pages:** 📈 **Dashboard** (the operations control centre screen: a real day at Atlanta replayed to the
+minute from US DOT records, with the turn alerts AeroTurn would raise; plus a month review and the KPI framework
+current workflow vs AeroTurn) · 🧪 **Simulation** (the live agent on a sample scenario, told as six chapters:
+1 recover the flight, 2 under pressure, 3 safety & audit, 4 the 5 curveballs, 5 our 13 edge cases, 6 cost & limits) · 🔌 **Implementation** (live
 connectors to real feeds, the alert rule replayed on real flights, integration map, rollout, pilot design) ·
 💼 **Business model** (competitors, pricing, ROI and unit economics; every number is real/published or an
 editable assumption). Sources: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
 **🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script for three speakers](docs/PITCH_ROUND3.md).**
-The journey starts from a real delay alert, checked in code. The 🚦 *Pilot console* tab runs 12 inbox requests back
-to back, with a forced model timeout recovered by the backup model. It also triggers the three safety cases on
-demand (safe auto-action, risky action paused with a safe default, blocked attack), shows the hash-chained audit
-lines, and measures tokens, latency and cost.
+The journey starts from a real delay alert, checked in code (Simulation, chapter 1). Chapter 2 runs 12 inbox
+requests back to back, with a forced model timeout recovered by the backup model. Chapter 3 triggers the three
+safety cases on demand (safe auto-action, risky action paused with a safe default, blocked attack) and shows the
+hash-chained audit lines. Chapter 6 gives the measured tokens, latency and cost and the current limits.
 
 **Round 1 submission (TechX Dubai'26 template, 8 slides): [PDF](docs/EagleX_Round1_Submission.pdf) · [PowerPoint](docs/EagleX_Round1_Submission.pptx)**, built with screenshots from the live demo.
 
@@ -64,7 +66,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
   (`aeroturn/config.py`).
 - 46 of the 48 bags travel with their owners; the 2 Karachi bags that cannot make the 16:35 (42 min, bag minimum
   45) follow on EK606 17:45 with a delivery note, written in the same transaction as their owners' seats.
-- 116 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
+- 118 automated tests pass, including the 5 organiser curveballs (U-4.1 to U-4.5, each live test end to end) and
   13 edge cases where the world changes after the plan (all resolved or escalated, none broken).
 
 ---
@@ -75,7 +77,7 @@ arithmetic behind each figure on the dashboard (crew limits, stand choice, EU261
 pip install -r requirements.txt
 streamlit run app.py          # OCC dashboard at http://localhost:8501
 python run_demo.py            # the same scenario in the terminal; you approve as the controller
-python -m pytest -q           # 116 tests
+python -m pytest -q           # 118 tests
 python scripts/round3_evidence.py   # Round 3: re-measure tokens, latency, cost; export log evidence
 ```
 
@@ -276,8 +278,11 @@ them with `python scripts/build_dataset.py`.
 ## Repository layout
 
 ```
-app.py                     Streamlit OCC dashboard (10 tabs: Operations, Pilot console, Curveballs, Edge cases,
-                           Guardrails, Passengers, Crew & duty, Turnaround & MX, Cost & network, Audit & data)
+app.py                     Streamlit router: four pages in views/
+views/dashboard.py         OCC live board (a real day replayed) + month review and KPI framework
+views/simulation.py        the live agent as six chapters (recover, under pressure, safety & audit, 5 curveballs,
+                           13 edge cases, cost & limits)
+views/implementation.py · views/business.py   real-world rollout and business model
 run_demo.py                terminal version of the demo (python run_demo.py --yes)
 requirements.txt           Python dependencies
 aeroturn/                  the agent package (25 modules)
@@ -301,7 +306,7 @@ aeroturn/                  the agent package (25 modules)
   dataset.py · facts.py    synthetic scenario generator (seed 812) · typed facts for the guards
   config.py · timeutil.py  commercial assumptions, paths · time helpers
   faults.py · lab.py       chaos injection · sandboxed experiments
-tests/                     116 pytest tests in 11 files (+ conftest.py)
+tests/                     118 pytest tests in 12 files (+ conftest.py)
 data/                      pristine SQLite scenario + JSON snapshot
 scripts/                   build_dataset.py · pin_guards.py · deck/ (capture screenshots, build decks and diagram, record the video)
 docs/                      ARCHITECTURE · DATA_SOURCES · NUMBERS_EXPLAINED · DEMO_SCRIPT · PITCH · PITCH_SCRIPT · SUBMISSION_FORM ·
@@ -368,7 +373,7 @@ The 🛡 **Guardrails** tab shows live evidence, from the session's own database
 
 The 🧪 **Edge cases** tab runs the 13 cases above (one at a time or all at once), each with its timeline and its ✓/✕ checks. Your live session is not touched.
 
-Detail tabs cover passengers, crew & duty, turnaround & MX, cost & network, and the audit log with the data sources.
+Details (every passenger, the standby captains, the turnaround tasks) sit in an expander under chapter 1's outcome.
 
 ![recovery flow, priority queue and cost](docs/img/demo/agent_rowB.png)
 
