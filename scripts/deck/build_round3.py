@@ -125,7 +125,8 @@ fill(s, "Text 4", "Duty operations controllers in a hub OCC. One late inbound (E
 fill(s, "Text 8", ["Worked: AI recovery agent, 13 guarded tools, 28 sealed rules, atomic rebooking, controller approval, "
                    "5 curveballs.", "Missing: it started from a button on a preloaded scenario, one model with 180 s "
                    "timeouts, no burst test, no cost data."], size=10, spacing=3)
-fill(s, "Text 13", ["Real trigger: a delay alert, checked in code", "12-request OCC inbox burst",
+fill(s, "Text 13", ["Real open data: dashboard on US DOT flight records", "Real trigger: a delay alert, checked in code",
+                    "12-request OCC inbox burst",
                     "20 s timeout, 2 retries, backup model, offline fallback", "3 safety cases on demand, with log IDs",
                     "Measured tokens, latency and cost"], size=10, spacing=2)
 fill(s, "Text 18", ["Runs live from alert to an approved plan", "Survives a forced model failure",
@@ -263,7 +264,8 @@ r.font.color.theme_color = MSO_THEME_COLOR.ACCENT_5
 
 # 9. limitations and risks
 s = S[8]
-fill(s, "Text 5", ["Synthetic data only (seed 812): no live reservations, crew, maintenance or airport feeds",
+fill(s, "Text 5", ["Passenger, crew and maintenance records are not public: the simulation uses a sample scenario "
+                   "(no real personal data, as the rules require); the dashboard uses real flight data",
                    "One hub, one late aircraft at a time", "Crew rules: simplified EASA model, not GCAA-certified"],
      size=12, spacing=8)
 fill(s, "Text 9", [f"Free tier: {LIM.get('tokens_per_minute', 8000):,} tokens/minute, about one recovery a minute", "Backup model is on the same provider; a second "
@@ -290,6 +292,137 @@ fill(s, "Text 7", ["Plan-and-execute (2–3 large calls) over a chatty tool loop
 s = S[10]
 ph = [x for x in s.shapes if x.has_text_frame]
 fill_shape(ph[1], [f"Project link: {LIVE}", f"Code: {CODE}  ·  Contact: {EMAIL}"], color=None)
+
+# ---------------------------------------------------------------------------
+# New slides (same CONTENT layout, title and criterion tag copied from the template's own slide)
+# ---------------------------------------------------------------------------
+sys.path.insert(0, str(ROOT))
+from aeroturn import config as CFG, realdata as RD  # noqa: E402
+
+SUM = RD.month_summary()
+REC_D = RD.recovery_days()
+ST = RD.strata_table().set_index("Stratum")
+NORMAL = RD.daily()[RD.daily().stratum == "Normal"]
+VALUE_YEAR = float(NORMAL.LateAircraftDelay.mean()) * 365 * CFG.A4A_COST_PER_MIN_USD
+JULY_COST = SUM["late_aircraft_minutes"] * CFG.A4A_COST_PER_MIN_USD
+KNOCK_DAY = SUM["knock_ons"] / 31
+PRICE_ASSUMED = 300_000
+MODEL_YEAR = KNOCK_DAY * 365 * R["mean_cost_usd"]
+CONTENT = next(lay for lay in prs.slide_layouts if lay.name == "CONTENT")
+TEMPLATE_SLIDE = S[1]
+
+
+_NEW = [0]
+
+
+def new_slide(title: str, tag: str):
+    from pptx.opc.packuri import PackURI
+    ns = prs.slides.add_slide(CONTENT)
+    _NEW[0] += 1
+    ns.part.partname = PackURI(f"/ppt/slides/slide{100 + _NEW[0]}.xml")   # unique: the template's numbering has gaps
+    for sp in list(ns.shapes):
+        sp._element.getparent().remove(sp._element)
+    for sh in TEMPLATE_SLIDE.shapes:
+        if sh.name in ("Text 0", "Criterion tag", "Slide Number Placeholder 0"):
+            ns.shapes._spTree.append(deepcopy(sh._element))
+    for sh in ns.shapes:
+        if sh.name == "Text 0":
+            sh.text_frame.paragraphs[0].runs[0].text = title
+        if sh.name == "Criterion tag":
+            sh.text_frame.paragraphs[0].runs[0].text = tag
+    return ns
+
+
+def bullets_box(slide, box, lines, size=10.5, title=None, note=None):
+    x, y, w, h = box
+    card = slide.shapes.add_shape(1, Inches(x), Inches(y), Inches(w), Inches(h))
+    card.fill.solid()
+    card.fill.fore_color.rgb = RGBColor(0xED, 0xF2, 0xFB)
+    card.line.color.rgb = RGBColor(0xC9, 0xD8, 0xF0)
+    card.shadow.inherit = False
+    tf = slide.shapes.add_textbox(Inches(x + 0.15), Inches(y + 0.1), Inches(w - 0.3), Inches(h - 0.2)).text_frame
+    tf.word_wrap = True
+    first = True
+    if title:
+        r = tf.paragraphs[0].add_run()
+        r.text = title
+        r.font.size, r.font.bold = Pt(12), True
+        r.font.color.theme_color = MSO_THEME_COLOR.TEXT_2
+        first = False
+    for ln in lines:
+        par = tf.paragraphs[0] if first else tf.add_paragraph()
+        first = False
+        par.space_after = Pt(5)
+        r = par.add_run()
+        r.text = "• " + ln
+        r.font.size = Pt(size)
+        r.font.color.theme_color = MSO_THEME_COLOR.TEXT_1
+    if note:
+        par = tf.add_paragraph()
+        r = par.add_run()
+        r.text = note
+        r.font.size = Pt(8)
+        r.font.color.theme_color = MSO_THEME_COLOR.ACCENT_5
+
+
+# A. the problem in real data
+sA = new_slide("The problem, in real data", "Real data")
+picture(sA, IMG / "dash_top.png", (0.5, 1.2, 5.35, 3.75))
+bullets_box(sA, (6.0, 1.2, 3.5, 3.75), [
+    f"Atlanta, July 2024: {SUM['departures']:,} departures, {SUM['airlines']} airlines (US DOT BTS flight records)",
+    f"{SUM['late_aircraft_share']:.0f}% of delay minutes came from late-arriving aircraft: the turnaround chain "
+    "AeroTurn breaks",
+    f"{SUM['knock_ons']:,} knock-on turns: {ST.loc['Normal', 'Knock-on turns / day']:.0f} a day on normal days, "
+    f"{ST.loc['Major disruption', 'Knock-on turns / day']:.0f} on outage days",
+    f"After the 19 July IT outage the hub needed {REC_D['days']} days to recover ({REC_D['cancelled']:,} departures "
+    "cancelled)",
+    f"Late-aircraft delay cost ≈ ${JULY_COST / 1e6:,.1f}M that month (× A4A ${CFG.A4A_COST_PER_MIN_USD}/min)"],
+    size=10, title="What the data shows",
+    note="Sources: BTS on-time records (public domain), OurAirports, A4A 2025 delay cost. Dashboard page, live.")
+
+# B. how we implement it
+sB = new_slide("How we implement it, shown live", "Deployment · 25%")
+picture(sB, IMG / "impl_trigger.png", (0.5, 1.2, 4.55, 2.35))
+picture(sB, IMG / "impl_integration.png", (5.15, 1.2, 4.35, 2.35))
+bullets_box(sB, (0.5, 3.7, 9.0, 1.3), [
+    "Connectors run now on real feeds: BTS flight records, OurAirports, OpenSky live aircraft over Dubai (8 s timeout, "
+    "cached fallback). In a pilot the same slots take the airline's own feeds.",
+    "AeroTurn's alert rule replayed on real flights: 223 recovery cases at ATL on 19 July 2024 (each a real aircraft "
+    "and two real flights).",
+    "Rollout: data check → shadow (8–12 weeks, X vs Y measured, stratified) → advisor → supervised. Plugs into the "
+    "airline's existing systems (e.g. Amadeus, Sabre, SITA, Jeppesen, Lufthansa Systems) instead of replacing them."],
+    size=9.5)
+
+# C. business model
+sC = new_slide("Business model", "Pitch · 15%")
+picture(sC, IMG / "biz_top.png", (0.5, 1.2, 5.0, 3.75))
+bullets_box(sC, (5.65, 1.2, 3.85, 3.75), [
+    "Annual subscription per hub + one-time integration; cloud or on-premise with an open-weight model",
+    "The safety and orchestration layer on top of Amadeus, SITA, Lufthansa Systems, Sabre, Jeppesen: integrate, "
+    "don't replace",
+    f"Value pool (real × published): ${VALUE_YEAR / 1e6:,.0f}M a year of late-aircraft delay at one hub, normal days "
+    "only",
+    f"Break-even: at an assumed ${PRICE_ASSUMED // 1000}k per hub-year it pays back if it removes "
+    f"{PRICE_ASSUMED / VALUE_YEAR * 100:.2f}% of those minutes",
+    f"Model cost per hub ≈ ${MODEL_YEAR:,.0f} a year (measured cost per recovery × real case volume)"],
+    size=10, title="How it makes money",
+    note="Price and reduction are assumptions (no vendor publishes prices); the pilot measures the reduction.")
+
+# order: insert A after slide 2, B after deployment, C after cost
+ids = prs.slides._sldIdLst
+elems = list(ids)
+a_el, b_el, c_el = elems[-3], elems[-2], elems[-1]
+for el in (a_el, b_el, c_el):
+    ids.remove(el)
+order = list(ids)
+order.insert(2, a_el)                       # after "What we improved"
+dep = 7                                     # title, improved, A, workflow, load, safety, audit, deployment
+order.insert(dep + 1, b_el)
+order.insert(dep + 3, c_el)                 # after cost and latency
+for el in list(ids):
+    ids.remove(el)
+for el in order:
+    ids.append(el)
 
 prs.save(OUT)
 print("wrote", OUT, "slides:", len(prs.slides))

@@ -1,8 +1,22 @@
 # AeroTurn: datasets, sources and assumptions
 
 **Summary:**
-- The brief provides **no dataset** and asks teams to synthesise their own.
-- All operational data in AeroTurn (passengers, bags, crew, flights, defects) is **synthetic and byte-reproducible** (seed 812).
+- **📈 The Dashboard, 🔌 Implementation and 💼 Business pages run on real, open data:**
+
+| Source | What | Publisher · licence | URL |
+|---|---|---|---|
+| BTS Reporting Carrier On-Time Performance, July 2024 | 634,613 US flights; the 60,144 touching Atlanta (ATL): scheduled and actual times, delay minutes by cause, cancellations, tail numbers | US DOT Bureau of Transportation Statistics · public domain | https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2024_7.zip |
+| OurAirports airports.csv | Airport names and coordinates (153 airports in ATL's network) | OurAirports · public domain | https://davidmegginson.github.io/ourairports-data/airports.csv |
+| OpenSky Network live state vectors | Live aircraft around Dubai (DXB), called with an 8 s timeout and a cached fallback | OpenSky Network · free for research and non-commercial use; a commercial product needs their written licence | https://opensky-network.org/api/states/all |
+| A4A U.S. passenger carrier delay cost | US$ 98.41 per block minute (2025) | Airlines for America | https://airlines.org/dataset/u-s-passenger-carrier-delay-costs/ |
+| EUROCONTROL Standard Inputs, ed. 10 | €166 per minute of tactical delay at the gate (2022 prices) | EUROCONTROL | https://ansperformance.eu/economics/cba/standard-inputs/latest/chapters/cost_of_delay.html |
+| Delta Air Lines SEC 8-K (Aug 2024) | ~7,000 cancellations over five days after 19 July 2024; $380M revenue impact | SEC EDGAR | https://www.sec.gov/Archives/edgar/data/27904/000168316824005369/delta_8k.htm |
+
+  Re-create the processed files with `python scripts/fetch_real_data.py`; `data/real/manifest.json` records URL,
+  licence, size, SHA-256 and row counts. Analysis code: `aeroturn/realdata.py`.
+- **🧪 The Simulation page** needs passenger itineraries, crew rosters and maintenance records, which are never public
+  and must not be real personal data (Round 3 rules). It therefore runs on a **sample scenario** (seed 812),
+  clearly labelled as one. Its rules come from the public sources cited below.
 - Every rule, threshold and legal amount in the code either comes from a **public source cited below** or is listed under **[Our assumptions](#4-our-assumptions-no-external-source)**.
 
 ---

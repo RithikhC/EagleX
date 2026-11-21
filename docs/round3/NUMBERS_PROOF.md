@@ -11,7 +11,24 @@ Each number has one of four kinds of proof:
 Model outputs vary a little from run to run, and the provider's rate limits depend on load. Re-running the script
 gives similar numbers, not identical ones.
 
-## The scenario (dataset)
+## Real data (Dashboard, Implementation, Business pages)
+
+All computed by `aeroturn/realdata.py` from `data/real/` (BTS on-time records for ATL, July 2024, SHA-256 in
+`data/real/manifest.json`).
+
+| Number | Proof |
+|---|---|
+| 30,072 departures, 13 airlines, 63.9% on time, 1,778 cancelled | Count of ATL departures; on time = left < 15 min late (BTS definition) |
+| 921,161 delay minutes; 35.1% from late-arriving aircraft | Sum of BTS cause minutes for arrivals at ATL 15+ min late |
+| 23,756 aircraft turns; 3,499 knock-on turns (91/day normal, 198/day outage) | Arrivals joined to the same tail number's next ATL departure; knock-on = inbound 15+ late, ate the buffer, outbound 15+ late |
+| 5 days to recover after 19 July; 1,589 cancellations | Days until cancellations fell back under 2% |
+| 223 recovery cases on 19 July | The alert rule applied to that day's turns |
+| $31.8M late-aircraft delay cost (July); $254M/year value pool | Minutes × A4A $98.41/min; the pool uses normal days only × 365 |
+| Break-even 0.12% at $300k/hub-year | **Assumption:** the price ($300k); real: the value pool |
+| Model cost ≈ $65 per hub-year | Real case volume (113/day) × measured $0.0016 per recovery |
+| ~7,000 cancellations, $380M | Delta SEC 8-K, Aug 2024 |
+
+## The scenario (Simulation page, sample data)
 
 | Number | Proof |
 |---|---|

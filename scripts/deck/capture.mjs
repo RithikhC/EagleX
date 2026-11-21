@@ -40,7 +40,7 @@ async function idle(timeoutMs = 60000, quietMs = 1800) {
     const running = await evalJs(`(() => { const s = document.querySelector('[data-testid="stStatusWidget"]');
       return !!(s && /running|connecting/i.test(s.innerText || s.getAttribute('aria-label') || '')) ||
              !!document.querySelector('[data-testid="stSkeleton"]') ||
-             !document.body.innerText.includes('AEROTURN OCC'); })()`);
+             !(document.body.innerText.includes('AEROTURN OCC') || document.body.innerText.includes('SIMULATION')); })()`);
     if (!running) { quietSince ??= Date.now(); if (Date.now() - quietSince > quietMs) return true; }
     else quietSince = null;
     await sleep(300);

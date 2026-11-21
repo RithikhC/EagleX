@@ -13,6 +13,15 @@ not a new project.
 | Proof of every number | [round3/NUMBERS_PROOF.md](round3/NUMBERS_PROOF.md) |
 | Live pitch and demo (7 + 5 min) | Script: [PITCH_ROUND3.md](PITCH_ROUND3.md) |
 
+## The app, in four pages
+
+| Page | What it shows | Data |
+|---|---|---|
+| 📈 Dashboard | Atlanta, July 2024: on-time, cancellations, delay causes, knock-on turns, strata; KPI framework X (current) vs Y (AeroTurn) | Real: US DOT BTS, OurAirports, A4A |
+| 🧪 Simulation | The live agent: alert → plan → approval; Pilot console (burst, safety cases, audit, cost) | Sample scenario (no real personal data) |
+| 🔌 Implementation | Live connectors with checks; AeroTurn's alert rule on real flights (223 cases on 19 July); integration map; rollout; pilot design | Real + live (OpenSky) |
+| 💼 Business model | Competitors (Amadeus, SITA, Lufthansa Systems, Sabre, Jeppesen), pricing, customer ROI, unit economics | Real + labelled assumptions |
+
 ## The one user journey
 
 **User:** the duty operations controller in a hub OCC.

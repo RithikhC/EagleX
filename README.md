@@ -8,6 +8,12 @@
 their own copy of the scenario, so click freely and use *↺ Reset scenario* to start over. If the app has been
 asleep, the first load takes about a minute.
 
+**Four pages:** 📈 **Dashboard** (real US DOT flight data for Atlanta, July 2024, and the KPI framework current
+workflow vs AeroTurn) · 🧪 **Simulation** (the live agent on a sample scenario) · 🔌 **Implementation** (live
+connectors to real feeds, the alert rule replayed on real flights, integration map, rollout, pilot design) ·
+💼 **Business model** (competitors, pricing, ROI and unit economics; every number is real/published or an
+editable assumption). Sources: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
+
 **🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script for three speakers](docs/PITCH_ROUND3.md).**
 The journey starts from a real delay alert, checked in code. The 🚦 *Pilot console* tab runs 12 inbox requests back
 to back, with a forced model timeout recovered by the backup model. It also triggers the three safety cases on

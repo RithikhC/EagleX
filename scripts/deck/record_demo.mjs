@@ -65,7 +65,7 @@ async function idle(timeoutMs = 60000, quietMs = 1500) {
   const t0 = Date.now(); let q = null; await sleep(600);
   while (Date.now() - t0 < timeoutMs) {
     const busy = await js(`(() => { const s = document.querySelector('[data-testid="stStatusWidget"]');
-      return !!(s && /running|connecting/i.test(s.innerText || '')) || !document.body.innerText.includes('AEROTURN OCC'); })()`);
+      return !!(s && /running|connecting/i.test(s.innerText || '')) || !(document.body.innerText.includes('AEROTURN OCC') || document.body.innerText.includes('SIMULATION')); })()`);
     if (!busy) { q ??= Date.now(); if (Date.now() - q > quietMs) return; } else q = null;
     await sleep(250);
   }
