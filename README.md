@@ -16,7 +16,7 @@ connectors to real feeds, the alert rule replayed on real flights, integration m
 💼 **Business model** (competitors, pricing, ROI and unit economics; every number is real/published or an
 editable assumption). Sources: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
-**🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script for three speakers](docs/PITCH_ROUND3.md).**
+**🚦 Round 3 (Make It Work in Practice): [submission sheet](docs/ROUND3.md) · [presentation PDF](docs/EagleX_Round3_Final.pdf) (official template, 20 slides: intro, problem on real data, solution, architecture, Round 2 → 3, live demo map, demo slides, deployment, cost, limits, B2B SaaS model, feasibility, MVP, sources) · [log evidence](docs/round3/log_evidence.png) ([text export](docs/round3/log_evidence.txt)) · [7-minute pitch and demo script for three speakers](docs/PITCH_ROUND3.md).**
 The journey starts from a real delay alert, checked in code (Simulation, chapter 1). Chapter 2 runs 12 inbox
 requests back to back, with a forced model timeout recovered by the backup model. Chapter 3 triggers the three
 safety cases on demand (safe auto-action, risky action paused with a safe default, blocked attack) and shows the

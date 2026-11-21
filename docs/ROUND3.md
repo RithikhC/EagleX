@@ -43,8 +43,8 @@ rebooked with their bags, passenger messages and the cost in AED.
 |---|---|---|
 | Workflow & resilience (30%) | Alert → plan in one run. 12 inbox requests back to back. A forced timeout on REQ-05 recovered by the backup model. | 🧪 Simulation › 1 · Recover the flight · 2 · Under pressure |
 | Safety & audit (30%) | Safe auto-action, risky action paused (safe default: it expires and nothing changes), blocked attack, each with a log ID | 🧪 Simulation › 3 · Safety & audit |
-| Deployment, cost & limits (25%) | Measured tokens, latency and cost; deployment plan; limitations | 🧪 Simulation › 6 · Cost & limits · 🔌 Implementation · slides 7–9 |
-| Pitch & Q&A (15%) | Value and trade-offs | slide 10 · [PITCH_ROUND3.md](PITCH_ROUND3.md) |
+| Deployment, cost & limits (25%) | Measured tokens, latency and cost; deployment plan; limitations | 🧪 Simulation › 6 · Cost & limits · 🔌 Implementation · slides 13–15, 17–18 |
+| Pitch & Q&A (15%) | Value, B2B SaaS business model, trade-offs | slides 2–4, 16, 19 · [PITCH_ROUND3.md](PITCH_ROUND3.md) |
 
 ## Resilience settings (`aeroturn/llm.py`)
 
