@@ -34,7 +34,7 @@ def fetch_opensky() -> dict:
         data = json.loads((R.REAL / "opensky_dxb_snapshot.json").read_text(encoding="utf-8"))
         return {"mode": "cache", "data": data, "ms": int((time.perf_counter() - t0) * 1000),
                 "at": dt.datetime.utcfromtimestamp(data["time"]).strftime("%d %b %H:%M UTC"),
-                "error": f"{type(exc).__name__}: {str(exc)[:80]}"}
+                "error": f"{type(exc).__name__}: {str(getattr(exc, 'reason', exc))[:80] or 'no response'}"}
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +78,9 @@ with st.container(border=True):
                     f"research licence</p><p><b>{len(states)}</b> aircraft in the DXB area at {osk['at']}</p>"
                     + (f"<p>✕ live call failed ({osk.get('error', '')}): cached snapshot shown, the page did not "
                        f"stop</p>" if osk["mode"] == "cache" else "<p>✓ 8 s timeout · fallback to cached snapshot</p>")
-                    + "<div class='src'>Production: the airline's own ADS-B/ACARS feed or an OpenSky commercial "
-                      "licence.</div></div>", unsafe_allow_html=True)
+                    + "<div class='src'>OpenSky blocks many cloud servers: run locally to see it live. Production: "
+                      "the airline's own ADS-B/ACARS feed or an OpenSky commercial licence.</div></div>",
+                    unsafe_allow_html=True)
         if st.button("↻ Call OpenSky again", width="stretch"):
             ss["opensky"] = fetch_opensky()
             st.rerun()
